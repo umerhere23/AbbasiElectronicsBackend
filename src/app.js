@@ -8,6 +8,11 @@ const adminRoutes = require("./routes/adminRoutes");
 const productRoutes = require("./routes/productRoutes");
 const saleRoutes = require("./routes/saleRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
+const categoryRoutes = require("./routes/categoryRoutes");
+const contactRoutes = require("./routes/contactRoutes");
+const orderRoutes = require("./routes/orderRoutes");
+const settingRoutes = require("./routes/settingRoutes");
+const inventoryRoutes = require("./routes/inventoryRoutes");
 const { notFound, errorHandler } = require("./middlewares/errorHandler");
 
 const app = express();
@@ -26,6 +31,11 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/sales", saleRoutes);
 app.use("/api/upload", uploadRoutes);
+app.use("/api/categories", categoryRoutes);
+app.use("/api/contact", contactRoutes);
+app.use("/api/orders", orderRoutes);
+app.use("/api/settings", settingRoutes);
+app.use("/api/inventory", inventoryRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

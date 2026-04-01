@@ -1,5 +1,6 @@
 const Product = require("../models/Product");
 const Sale = require("../models/Sale");
+const { recordInventoryLog } = require("../utils/inventoryLogger");
 
 const getSales = async (req, res, next) => {
   try {
@@ -69,9 +70,23 @@ const createSale = async (req, res, next) => {
       soldBy: req.admin._id,
     });
 
+    const previousStock = Number(product.stockCount || 0);
     product.stockCount -= saleQuantity;
+    product.soldCount = Number(product.soldCount || 0) + saleQuantity;
     product.inStock = product.stockCount > 0;
     await product.save();
+
+    await recordInventoryLog({
+      productId: product._id,
+      type: "sale",
+      quantityChange: -saleQuantity,
+      previousStock,
+      newStock: Number(product.stockCount || 0),
+      note: "Stock reduced via manual sale entry",
+      referenceType: "sale",
+      referenceId: String(sale._id),
+      performedBy: req.admin._id,
+    });
 
     const populatedSale = await Sale.findById(sale._id)
       .populate("product", "name category")

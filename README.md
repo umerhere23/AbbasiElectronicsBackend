@@ -35,12 +35,19 @@ src/
 - `POST /api/admin/register` -> Register admin
 - `POST /api/admin/login` -> Login admin
 - `GET /api/admin/me` -> Current admin profile (Bearer token)
+- `GET /api/admin/overview` -> Dashboard overview metrics (Bearer token)
 - `GET /api/products` -> List products
 - `POST /api/products` -> Add product (Bearer token)
 - `PUT /api/products/:id` -> Edit product (Bearer token)
+- `DELETE /api/products/:id` -> Delete product (Bearer token)
 - `GET /api/sales` -> List sales (Bearer token)
 - `POST /api/sales` -> Create sale (Bearer token)
 - `POST /api/upload/product-image` -> Upload product image (Bearer token, form-data with `image`)
+- `POST /api/upload/category-image` -> Upload category image (Bearer token, form-data with `image`)
+
+## Seeder Commands
+- `npm run seed:admin` -> Create/update super admin
+- `npm run seed:products` -> Seed 20 products across categories
 
 ### Create user body
 {

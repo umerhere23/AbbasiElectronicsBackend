@@ -22,6 +22,11 @@ const productSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    soldCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     onSale: {
       type: Boolean,
       default: false,
@@ -42,6 +47,11 @@ const productSchema = new mongoose.Schema(
       trim: true,
       default: "General",
     },
+    categoryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Category",
+      default: null,
+    },
     image: {
       type: String,
       trim: true,
@@ -61,5 +71,10 @@ const productSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+productSchema.pre("validate", function setStockStatus(next) {
+  this.inStock = Number(this.stockCount || 0) > 0;
+  next();
+});
 
 module.exports = mongoose.model("Product", productSchema);
