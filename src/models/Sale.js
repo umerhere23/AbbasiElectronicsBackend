@@ -48,6 +48,11 @@ const saleSchema = new mongoose.Schema(
       ref: "Admin",
       required: true,
     },
+    saleGroupId: {
+      type: String,
+      trim: true,
+      default: "",
+    },
   },
   {
     timestamps: true,

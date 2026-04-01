@@ -31,6 +31,31 @@ const orderItemSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const orderFeedbackSchema = new mongoose.Schema(
+  {
+    rating: {
+      type: Number,
+      min: 1,
+      max: 5,
+      required: true,
+    },
+    message: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    submittedByEmail: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      required: true,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
 const orderSchema = new mongoose.Schema(
   {
     customerName: {
@@ -112,6 +137,10 @@ const orderSchema = new mongoose.Schema(
       type: String,
       enum: ["pending", "confirmed", "shipped", "delivered", "cancelled"],
       default: "pending",
+    },
+    feedbacks: {
+      type: [orderFeedbackSchema],
+      default: [],
     },
   },
   {

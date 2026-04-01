@@ -52,6 +52,16 @@ const productSchema = new mongoose.Schema(
       ref: "Category",
       default: null,
     },
+    brand: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    brandId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Brand",
+      default: null,
+    },
     image: {
       type: String,
       trim: true,

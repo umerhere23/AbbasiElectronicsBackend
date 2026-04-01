@@ -1,5 +1,6 @@
 const Product = require("../models/Product");
 const Category = require("../models/Category");
+const Brand = require("../models/Brand");
 const { recordInventoryLog } = require("../utils/inventoryLogger");
 
 const buildSalePricing = (basePrice, onSale, salePercent) => {
@@ -17,7 +18,18 @@ const buildSalePricing = (basePrice, onSale, salePercent) => {
 
 const getProducts = async (req, res, next) => {
   try {
-    const { category, categoryId, onSale, search, minPrice, maxPrice, sort, stockStatus } = req.query;
+    const {
+      category,
+      categoryId,
+      brand,
+      brandId,
+      onSale,
+      search,
+      minPrice,
+      maxPrice,
+      sort,
+      stockStatus,
+    } = req.query;
 
     const filter = {};
 
@@ -27,6 +39,14 @@ const getProducts = async (req, res, next) => {
 
     if (categoryId) {
       filter.categoryId = categoryId;
+    }
+
+    if (brand) {
+      filter.brand = brand;
+    }
+
+    if (brandId) {
+      filter.brandId = brandId;
     }
 
     if (onSale === "true") {
@@ -82,9 +102,27 @@ const getSaleItems = async (req, res, next) => {
   }
 };
 
+const getProductById = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const product = await Product.findById(id);
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+
+    return res.status(200).json({ success: true, data: product });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const addProduct = async (req, res, next) => {
   try {
-    const { name, description, price, stockCount, onSale, salePercent, category, categoryId, image } = req.body;
+    const { name, description, price, stockCount, onSale, salePercent, category, categoryId, brand, brandId, image } = req.body;
 
     if (!name || price === undefined) {
       return res.status(400).json({
@@ -125,6 +163,18 @@ const addProduct = async (req, res, next) => {
       categoryRef = categoryDoc._id;
     }
 
+    let brandName = brand || "";
+    let brandRef = null;
+
+    if (brandId) {
+      const brandDoc = await Brand.findById(brandId);
+      if (!brandDoc) {
+        return res.status(400).json({ success: false, message: "Invalid brand selected" });
+      }
+      brandName = brandDoc.name;
+      brandRef = brandDoc._id;
+    }
+
     const product = await Product.create({
       name,
       description,
@@ -135,6 +185,8 @@ const addProduct = async (req, res, next) => {
       salePrice: pricing.salePrice,
       category: categoryName,
       categoryId: categoryRef,
+      brand: brandName,
+      brandId: brandRef,
       image,
       createdBy: req.admin._id,
     });
@@ -162,7 +214,7 @@ const addProduct = async (req, res, next) => {
 const editProduct = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, description, price, stockCount, onSale, salePercent, category, categoryId, image } = req.body;
+    const { name, description, price, stockCount, onSale, salePercent, category, categoryId, brand, brandId, image } = req.body;
 
     const product = await Product.findById(id);
     if (!product) {
@@ -188,6 +240,16 @@ const editProduct = async (req, res, next) => {
       product.category = categoryDoc.name;
     } else {
       product.category = category ?? product.category;
+    }
+    if (brandId) {
+      const brandDoc = await Brand.findById(brandId);
+      if (!brandDoc) {
+        return res.status(400).json({ success: false, message: "Invalid brand selected" });
+      }
+      product.brandId = brandDoc._id;
+      product.brand = brandDoc.name;
+    } else {
+      product.brand = brand ?? product.brand;
     }
     product.image = image ?? product.image;
     product.inStock = product.stockCount > 0;
@@ -255,6 +317,43 @@ const deleteProduct = async (req, res, next) => {
   }
 };
 
+const deleteProductsBulk = async (req, res, next) => {
+  try {
+    const { productIds } = req.body;
+
+    if (!Array.isArray(productIds) || !productIds.length) {
+      return res.status(400).json({
+        success: false,
+        message: "Provide at least one product id",
+      });
+    }
+
+    const result = await Product.deleteMany({ _id: { $in: productIds } });
+
+    return res.status(200).json({
+      success: true,
+      message: `${result.deletedCount} product(s) deleted successfully`,
+      data: { deletedCount: result.deletedCount },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const deleteAllProducts = async (req, res, next) => {
+  try {
+    const result = await Product.deleteMany({});
+
+    return res.status(200).json({
+      success: true,
+      message: `${result.deletedCount} product(s) deleted successfully`,
+      data: { deletedCount: result.deletedCount },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const updateProductStock = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -308,8 +407,11 @@ const updateProductStock = async (req, res, next) => {
 module.exports = {
   getProducts,
   getSaleItems,
+  getProductById,
   addProduct,
   editProduct,
   deleteProduct,
+  deleteProductsBulk,
+  deleteAllProducts,
   updateProductStock,
 };

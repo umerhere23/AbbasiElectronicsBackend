@@ -2,9 +2,12 @@ const express = require("express");
 const {
   getProducts,
   getSaleItems,
+  getProductById,
   addProduct,
   editProduct,
   deleteProduct,
+  deleteProductsBulk,
+  deleteAllProducts,
   updateProductStock,
 } = require("../controllers/productController");
 const { protectAdmin } = require("../middlewares/authMiddleware");
@@ -13,7 +16,10 @@ const router = express.Router();
 
 router.get("/", getProducts);
 router.get("/sale-items", getSaleItems);
+router.get("/:id", getProductById);
 router.post("/", protectAdmin, addProduct);
+router.delete("/bulk-delete", protectAdmin, deleteProductsBulk);
+router.delete("/all", protectAdmin, deleteAllProducts);
 router.put("/:id", protectAdmin, editProduct);
 router.patch("/:id/stock", protectAdmin, updateProductStock);
 router.delete("/:id", protectAdmin, deleteProduct);
