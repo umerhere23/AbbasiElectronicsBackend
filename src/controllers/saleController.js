@@ -176,8 +176,167 @@ const deleteAllSales = async (req, res, next) => {
   }
 };
 
+const updateSale = async (req, res, next) => {
+  try {
+    const { saleId } = req.params;
+    const { quantity, discountPercent } = req.body;
+
+    const sale = await Sale.findById(saleId).populate("product");
+    if (!sale) {
+      return res.status(404).json({ success: false, message: "Sale not found" });
+    }
+
+    const newQuantity = Number(quantity);
+    const newDiscount = Number(discountPercent !== undefined ? discountPercent : sale.discountPercent);
+
+    if (isNaN(newQuantity) || newQuantity < 1) {
+      return res.status(400).json({ success: false, message: "Quantity must be at least 1" });
+    }
+
+    if (isNaN(newDiscount) || newDiscount < 0 || newDiscount > 100) {
+      return res.status(400).json({ success: false, message: "Discount must be between 0-100" });
+    }
+
+    const product = sale.product;
+    const quantityDifference = newQuantity - sale.quantity;
+
+    // Check if new quantity requires additional stock
+    if (quantityDifference > 0) {
+      if (!product.inStock || Number(product.stockCount || 0) < quantityDifference) {
+        return res.status(400).json({
+          success: false,
+          message: `Not enough additional stock for ${product.name}`,
+        });
+      }
+    }
+
+    // Record old inventory state
+    const previousStock = Number(product.stockCount || 0);
+
+    // Update stock
+    product.stockCount -= quantityDifference;
+    product.soldCount = Number(product.soldCount || 0) + quantityDifference;
+
+    // Update sale discount if changed
+    if (newDiscount > 0) {
+      product.onSale = true;
+      product.salePercent = newDiscount;
+      product.salePrice = Number((product.price * (1 - newDiscount / 100)).toFixed(2));
+    } else if (newDiscount === 0 && sale.discountPercent > 0) {
+      // If discount was removed, unset sale flags if no other sales have discount
+      const otherSales = await Sale.find({
+        product: product._id,
+        _id: { $ne: saleId },
+        discountPercent: { $gt: 0 },
+      });
+      if (!otherSales.length) {
+        product.onSale = false;
+        product.salePercent = 0;
+        product.salePrice = 0;
+      }
+    }
+
+    product.inStock = product.stockCount > 0;
+    await product.save();
+
+    // Update sale
+    sale.quantity = newQuantity;
+    sale.discountPercent = newDiscount;
+    const newFinalUnitPrice = Number((product.price * (1 - newDiscount / 100)).toFixed(2));
+    sale.finalUnitPrice = newFinalUnitPrice;
+    sale.totalAmount = Number((newFinalUnitPrice * newQuantity).toFixed(2));
+    await sale.save();
+
+    // Record inventory change
+    await recordInventoryLog({
+      productId: product._id,
+      type: "adjustment",
+      quantityChange: -quantityDifference,
+      previousStock,
+      newStock: Number(product.stockCount || 0),
+      note: `Sale quantity updated from ${sale.quantity} to ${newQuantity}, discount ${newDiscount}%`,
+      referenceType: "sale",
+      referenceId: String(saleId),
+      performedBy: req.admin._id,
+    });
+
+    const updatedSale = await Sale.findById(saleId)
+      .populate("product", "name category")
+      .populate("soldBy", "name email");
+
+    res.status(200).json({
+      success: true,
+      message: "Sale updated successfully",
+      data: updatedSale,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const deleteSale = async (req, res, next) => {
+  try {
+    const { saleId } = req.params;
+
+    const sale = await Sale.findById(saleId).populate("product");
+    if (!sale) {
+      return res.status(404).json({ success: false, message: "Sale not found" });
+    }
+
+    const product = sale.product;
+    const previousStock = Number(product.stockCount || 0);
+
+    // Restock the inventory
+    product.stockCount = Number(product.stockCount || 0) + sale.quantity;
+    product.soldCount = Math.max(0, Number(product.soldCount || 0) - sale.quantity);
+    product.inStock = product.stockCount > 0;
+
+    // If this was the only sale with a discount, remove discount flags
+    if (sale.discountPercent > 0) {
+      const otherSalesWithDiscount = await Sale.find({
+        product: product._id,
+        _id: { $ne: saleId },
+        discountPercent: { $gt: 0 },
+      });
+      if (!otherSalesWithDiscount.length) {
+        product.onSale = false;
+        product.salePercent = 0;
+        product.salePrice = 0;
+      }
+    }
+
+    await product.save();
+
+    // Record inventory log
+    await recordInventoryLog({
+      productId: product._id,
+      type: "reversal",
+      quantityChange: sale.quantity,
+      previousStock,
+      newStock: Number(product.stockCount || 0),
+      note: `Sale deleted - inventory restored (${sale.quantity} unit(s))`,
+      referenceType: "sale",
+      referenceId: String(saleId),
+      performedBy: req.admin._id,
+    });
+
+    // Delete the sale
+    await Sale.findByIdAndDelete(saleId);
+
+    res.status(200).json({
+      success: true,
+      message: "Sale deleted successfully and inventory restored",
+      data: { deletedSaleId: saleId, restoredQuantity: sale.quantity },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getSales,
   createSale,
+  updateSale,
+  deleteSale,
   deleteAllSales,
 };
