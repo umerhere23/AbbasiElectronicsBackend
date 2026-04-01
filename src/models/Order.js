@@ -56,6 +56,31 @@ const orderFeedbackSchema = new mongoose.Schema(
   }
 );
 
+const orderStatusHistorySchema = new mongoose.Schema(
+  {
+    status: {
+      type: String,
+      enum: ["pending", "confirmed", "shipped", "delivered", "cancelled"],
+      required: true,
+    },
+    note: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    changedBy: {
+      type: String,
+      trim: true,
+      default: "admin",
+    },
+    changedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false }
+);
+
 const orderSchema = new mongoose.Schema(
   {
     customerName: {
@@ -137,6 +162,14 @@ const orderSchema = new mongoose.Schema(
       type: String,
       enum: ["pending", "confirmed", "shipped", "delivered", "cancelled"],
       default: "pending",
+    },
+    statusHistory: {
+      type: [orderStatusHistorySchema],
+      default: [],
+    },
+    isRestockedOnCancel: {
+      type: Boolean,
+      default: false,
     },
     feedbacks: {
       type: [orderFeedbackSchema],

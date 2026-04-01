@@ -10,44 +10,79 @@ const stripeSecret = process.env.STRIPE_SECRET_KEY || "";
 const stripe = stripeSecret ? new Stripe(stripeSecret) : null;
 
 const buildInvoiceHtml = (order) => {
+  const statusLabel = String(order.status || "pending").toUpperCase();
+  const paymentLabel = String(order.paymentMethod || "cod").toUpperCase();
+  const statusColor =
+    order.status === "delivered"
+      ? "#1f6b3f"
+      : order.status === "cancelled"
+        ? "#8f2c20"
+        : "#1b4e7d";
+
   const rows = (order.items || [])
     .map(
       (item) => `
       <tr>
-        <td style="padding:8px;border:1px solid #e3e8f0;">${item.productName}</td>
-        <td style="padding:8px;border:1px solid #e3e8f0;text-align:center;">${item.quantity}</td>
-        <td style="padding:8px;border:1px solid #e3e8f0;text-align:right;">PKR ${Number(item.unitPrice || 0).toLocaleString()}</td>
-        <td style="padding:8px;border:1px solid #e3e8f0;text-align:right;">PKR ${Number(item.lineTotal || 0).toLocaleString()}</td>
+        <td style="padding:10px;border:1px solid #dbe5f1;">${item.productName}</td>
+        <td style="padding:10px;border:1px solid #dbe5f1;text-align:center;">${item.quantity}</td>
+        <td style="padding:10px;border:1px solid #dbe5f1;text-align:right;">PKR ${Number(item.unitPrice || 0).toLocaleString()}</td>
+        <td style="padding:10px;border:1px solid #dbe5f1;text-align:right;">PKR ${Number(item.lineTotal || 0).toLocaleString()}</td>
       </tr>`
     )
     .join("");
 
   return `
-    <div style="font-family:Arial,sans-serif;color:#1a2b3c;max-width:760px;margin:0 auto;">
-      <h2 style="margin:0 0 8px;">Abbasi Electronics - Invoice</h2>
-      <p style="margin:0 0 4px;"><strong>Order ID:</strong> ${order._id}</p>
-      <p style="margin:0 0 4px;"><strong>Date:</strong> ${new Date(order.createdAt).toLocaleString()}</p>
-      <p style="margin:0 0 4px;"><strong>Customer:</strong> ${order.customerName}</p>
-      <p style="margin:0 0 14px;"><strong>Payment:</strong> ${String(order.paymentMethod || "cod").toUpperCase()}</p>
+    <div style="font-family:Segoe UI,Arial,sans-serif;color:#142230;max-width:760px;margin:0 auto;background:#f5f7fb;padding:16px;">
+      <div style="background:#24338f;color:#ffffff;border-radius:12px 12px 0 0;padding:14px 16px;">
+        <h2 style="margin:0;font-size:21px;line-height:1.2;">Abbasi Electronics</h2>
+        <p style="margin:6px 0 0;font-size:13px;opacity:0.95;">Order Invoice</p>
+      </div>
 
-      <table style="width:100%;border-collapse:collapse;margin-top:8px;">
-        <thead>
-          <tr>
-            <th style="padding:8px;border:1px solid #e3e8f0;text-align:left;background:#f6f9fd;">Item</th>
-            <th style="padding:8px;border:1px solid #e3e8f0;text-align:center;background:#f6f9fd;">Qty</th>
-            <th style="padding:8px;border:1px solid #e3e8f0;text-align:right;background:#f6f9fd;">Unit Price</th>
-            <th style="padding:8px;border:1px solid #e3e8f0;text-align:right;background:#f6f9fd;">Line Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows}
-        </tbody>
-      </table>
+      <div style="background:#ffffff;border:1px solid #d9e4f2;border-top:0;border-radius:0 0 12px 12px;padding:16px;">
+        <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+          <div>
+            <p style="margin:0 0 4px;"><strong>Order ID:</strong> ${order._id}</p>
+            <p style="margin:0 0 4px;"><strong>Date:</strong> ${new Date(order.createdAt).toLocaleString()}</p>
+            <p style="margin:0;"><strong>Customer:</strong> ${order.customerName}</p>
+          </div>
+          <div style="text-align:right;">
+            <p style="margin:0 0 6px;"><strong>Payment:</strong> ${paymentLabel}</p>
+            <span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#eef5ff;border:1px solid #cadcf2;color:${statusColor};font-weight:700;font-size:12px;">${statusLabel}</span>
+          </div>
+        </div>
 
-      <div style="margin-top:14px;text-align:right;">
-        <p style="margin:4px 0;"><strong>Subtotal:</strong> PKR ${Number(order.subTotal || 0).toLocaleString()}</p>
-        <p style="margin:4px 0;"><strong>Delivery:</strong> PKR ${Number(order.deliveryCharge || 0).toLocaleString()}</p>
-        <p style="margin:4px 0;font-size:18px;"><strong>Total:</strong> PKR ${Number(order.totalAmount || 0).toLocaleString()}</p>
+        <table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:14px;">
+          <thead>
+            <tr>
+              <th style="padding:10px;border:1px solid #dbe5f1;text-align:left;background:#eef5fd;color:#133b59;">Item</th>
+              <th style="padding:10px;border:1px solid #dbe5f1;text-align:center;background:#eef5fd;color:#133b59;">Qty</th>
+              <th style="padding:10px;border:1px solid #dbe5f1;text-align:right;background:#eef5fd;color:#133b59;">Unit Price</th>
+              <th style="padding:10px;border:1px solid #dbe5f1;text-align:right;background:#eef5fd;color:#133b59;">Line Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+
+        <div style="margin-top:14px;margin-left:auto;max-width:280px;border:1px solid #d9e4f2;background:#f8fbff;border-radius:10px;padding:10px;">
+          <p style="margin:4px 0;display:flex;justify-content:space-between;">
+            <span>Subtotal</span>
+            <strong>PKR ${Number(order.subTotal || 0).toLocaleString()}</strong>
+          </p>
+          <p style="margin:4px 0;display:flex;justify-content:space-between;">
+            <span>Delivery</span>
+            <strong>PKR ${Number(order.deliveryCharge || 0).toLocaleString()}</strong>
+          </p>
+          <p style="margin:8px 0 0;padding-top:8px;border-top:1px dashed #c8d8ea;display:flex;justify-content:space-between;font-size:17px;color:#0f3d5f;">
+            <span><strong>Total</strong></span>
+            <strong>PKR ${Number(order.totalAmount || 0).toLocaleString()}</strong>
+          </p>
+        </div>
+
+        <div style="margin-top:14px;padding-top:10px;border-top:1px solid #e3ebf5;color:#4c6178;font-size:13px;">
+          Thank you for shopping with Abbasi Electronics.
+        </div>
       </div>
     </div>
   `;
@@ -80,6 +115,73 @@ const sendInvoiceEmail = async (order) => {
   } catch (error) {
     // Email is best-effort and should not block order completion.
     console.warn("Invoice email failed:", error.message);
+  }
+};
+
+const buildStatusUpdateHtml = (order, note = "") => {
+  const safeNote = String(note || "").trim();
+  const statusLabel = String(order.status || "pending").toUpperCase();
+  const statusColor =
+    order.status === "delivered"
+      ? "#1f6b3f"
+      : order.status === "cancelled"
+        ? "#8f2c20"
+        : "#1b4e7d";
+  const trackUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/track-order`;
+
+  return `
+    <div style="font-family:Segoe UI,Arial,sans-serif;color:#142230;max-width:760px;margin:0 auto;background:#f5f7fb;padding:16px;">
+      <div style="background:#24338f;color:#ffffff;border-radius:12px 12px 0 0;padding:14px 16px;">
+        <h2 style="margin:0;font-size:21px;line-height:1.2;">Abbasi Electronics</h2>
+        <p style="margin:6px 0 0;font-size:13px;opacity:0.95;">Order Status Update</p>
+      </div>
+
+      <div style="background:#ffffff;border:1px solid #d9e4f2;border-top:0;border-radius:0 0 12px 12px;padding:16px;">
+        <p style="margin:0 0 6px;"><strong>Order ID:</strong> ${order._id}</p>
+        <p style="margin:0 0 6px;"><strong>Customer:</strong> ${order.customerName}</p>
+        <p style="margin:0 0 10px;"><strong>Updated At:</strong> ${new Date().toLocaleString()}</p>
+
+        <div style="margin:0 0 12px;">
+          <span style="display:inline-block;padding:5px 12px;border-radius:999px;background:#eef5ff;border:1px solid #cadcf2;color:${statusColor};font-weight:700;font-size:12px;letter-spacing:0.02em;">${statusLabel}</span>
+        </div>
+
+        ${safeNote ? `<p style="margin:0 0 12px;"><strong>Admin Note:</strong> ${safeNote}</p>` : ""}
+
+        <a href="${trackUrl}" style="display:inline-block;background:#d07a2f;color:#ffffff;text-decoration:none;border-radius:999px;padding:9px 16px;font-weight:700;font-size:13px;">Track Your Order</a>
+
+        <p style="margin:12px 0 0;color:#4c6178;font-size:13px;">Use your order ID and email on the track page to view latest updates.</p>
+      </div>
+    </div>
+  `;
+};
+
+const sendOrderStatusEmail = async (order, note = "") => {
+  try {
+    const host = process.env.SMTP_HOST;
+    const user = process.env.SMTP_USER;
+    const pass = process.env.SMTP_PASS;
+    const from = process.env.SMTP_FROM || user;
+
+    if (!host || !user || !pass || !from) {
+      return;
+    }
+
+    const transporter = nodemailer.createTransport({
+      host,
+      port: Number(process.env.SMTP_PORT || 587),
+      secure: String(process.env.SMTP_SECURE || "false") === "true",
+      auth: { user, pass },
+    });
+
+    await transporter.sendMail({
+      from,
+      to: order.customerEmail,
+      subject: `Order Update - ${String(order.status || "pending").toUpperCase()} (${order._id})`,
+      html: buildStatusUpdateHtml(order, note),
+    });
+  } catch (error) {
+    // Email is best-effort and should not block admin actions.
+    console.warn("Order status email failed:", error.message);
   }
 };
 
@@ -205,6 +307,13 @@ const applyInventoryAndCreateOrder = async ({
     deliveryCharge: Number(deliveryCharge || 0),
     items: orderItems,
     totalAmount,
+    statusHistory: [
+      {
+        status: "pending",
+        note: paymentMethod === "stripe" ? "Order created from paid Stripe checkout" : "Order placed",
+        changedBy: "system",
+      },
+    ],
   });
 
   for (const item of normalizedItems) {
@@ -229,6 +338,38 @@ const applyInventoryAndCreateOrder = async ({
   }
 
   return order;
+};
+
+const restockOrderInventory = async (order, performedByAdminId = null) => {
+  for (const item of order.items || []) {
+    const product = await Product.findById(item.product);
+    if (!product) {
+      continue;
+    }
+
+    const quantity = Number(item.quantity || 0);
+    if (quantity <= 0) {
+      continue;
+    }
+
+    const previousStock = Number(product.stockCount || 0);
+    product.stockCount = previousStock + quantity;
+    product.soldCount = Math.max(0, Number(product.soldCount || 0) - quantity);
+    product.inStock = product.stockCount > 0;
+    await product.save();
+
+    await recordInventoryLog({
+      productId: product._id,
+      type: "adjustment",
+      quantityChange: quantity,
+      previousStock,
+      newStock: product.stockCount,
+      note: `Restocked due to order cancellation (${order._id})`,
+      referenceType: "order",
+      referenceId: String(order._id),
+      performedBy: performedByAdminId,
+    });
+  }
 };
 
 const createOrder = async (req, res, next) => {
@@ -445,7 +586,8 @@ const getOrders = async (req, res, next) => {
 const updateOrderStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, note } = req.body;
+    const normalizedNote = String(note || "").trim();
 
     const allowed = ["pending", "confirmed", "shipped", "delivered", "cancelled"];
     if (!allowed.includes(status)) {
@@ -457,8 +599,31 @@ const updateOrderStatus = async (req, res, next) => {
       return res.status(404).json({ success: false, message: "Order not found" });
     }
 
+    const previousStatus = order.status;
+
+    if (status === "cancelled" && !order.isRestockedOnCancel) {
+      await restockOrderInventory(order, req.admin?._id || null);
+      order.isRestockedOnCancel = true;
+    }
+
     order.status = status;
+    order.statusHistory = Array.isArray(order.statusHistory) ? order.statusHistory : [];
+    order.statusHistory.push({
+      status,
+      note: normalizedNote,
+      changedBy: req.admin?.name || req.admin?.email || "admin",
+      changedAt: new Date(),
+    });
+
     await order.save();
+
+    if (previousStatus !== status || normalizedNote) {
+      await sendOrderStatusEmail(order, normalizedNote);
+    }
+
+    if (status === "confirmed") {
+      await sendInvoiceEmail(order);
+    }
 
     return res.status(200).json({ success: true, data: order });
   } catch (error) {
@@ -517,6 +682,9 @@ const trackOrder = async (req, res, next) => {
         paymentMethod: order.paymentMethod,
         paymentStatus: order.paymentStatus,
         totalAmount: order.totalAmount,
+        latestNote: order.statusHistory?.length
+          ? order.statusHistory[order.statusHistory.length - 1].note || ""
+          : "",
         createdAt: order.createdAt,
         updatedAt: order.updatedAt,
       },
