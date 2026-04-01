@@ -404,6 +404,47 @@ const updateProductStock = async (req, res, next) => {
   }
 };
 
+const toggleFeedbackVisibility = async (req, res, next) => {
+  try {
+    const { productId, feedbackId } = req.params;
+    const { isVisible } = req.body;
+
+    if (isVisible === undefined || typeof isVisible !== "boolean") {
+      return res.status(400).json({
+        success: false,
+        message: "isVisible must be a boolean",
+      });
+    }
+
+    const product = await Product.findById(productId);
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+
+    const feedback = product.feedbacks.id(feedbackId);
+    if (!feedback) {
+      return res.status(404).json({
+        success: false,
+        message: "Feedback not found",
+      });
+    }
+
+    feedback.isVisible = isVisible;
+    await product.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `Feedback ${isVisible ? "shown" : "hidden"} successfully`,
+      data: feedback,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 module.exports = {
   getProducts,
   getSaleItems,
@@ -414,4 +455,5 @@ module.exports = {
   deleteProductsBulk,
   deleteAllProducts,
   updateProductStock,
+  toggleFeedbackVisibility,
 };

@@ -6,8 +6,8 @@ const router = express.Router();
 
 router.get("/", protectAdmin, getSales);
 router.post("/", protectAdmin, createSale);
+router.delete("/all", protectAdmin, deleteAllSales);
 router.patch("/:saleId", protectAdmin, updateSale);
 router.delete("/:saleId", protectAdmin, deleteSale);
-router.delete("/all", protectAdmin, deleteAllSales);
 
 module.exports = router;

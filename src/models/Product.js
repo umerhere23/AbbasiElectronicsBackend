@@ -1,5 +1,34 @@
 const mongoose = require("mongoose");
 
+const productFeedbackSchema = new mongoose.Schema(
+  {
+    rating: {
+      type: Number,
+      min: 1,
+      max: 5,
+      required: true,
+    },
+    message: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    submittedByEmail: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      required: true,
+    },
+    isVisible: {
+      type: Boolean,
+      default: true,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
 const productSchema = new mongoose.Schema(
   {
     name: {
@@ -70,6 +99,10 @@ const productSchema = new mongoose.Schema(
     inStock: {
       type: Boolean,
       default: true,
+    },
+    feedbacks: {
+      type: [productFeedbackSchema],
+      default: [],
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,

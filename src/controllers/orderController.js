@@ -710,7 +710,7 @@ const submitOrderFeedback = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Rating must be between 1 and 5" });
     }
 
-    const order = await Order.findById(id);
+    const order = await Order.findById(id).populate("items.product");
     if (!order) {
       return res.status(404).json({ success: false, message: "Order not found" });
     }
@@ -719,15 +719,58 @@ const submitOrderFeedback = async (req, res, next) => {
       return res.status(403).json({ success: false, message: "Order email does not match" });
     }
 
-    order.feedbacks.push({
+    // Check if user already submitted feedback for this order
+    const existingFeedback = order.feedbacks.find(
+      (fb) => String(fb.submittedByEmail || "").toLowerCase() === normalizedEmail
+    );
+
+    if (existingFeedback) {
+      return res.status(400).json({
+        success: false,
+        message: "You have already submitted feedback for this order",
+      });
+    }
+
+    const feedbackData = {
       submittedByEmail: normalizedEmail,
       rating: normalizedRating,
       message: String(message || "").trim(),
-    });
+    };
 
+    // Add feedback to order
+    order.feedbacks.push(feedbackData);
     await order.save();
 
-    return res.status(201).json({ success: true, message: "Feedback submitted successfully" });
+    // Add feedback to all products in the order
+    if (order.items && Array.isArray(order.items)) {
+      for (const item of order.items) {
+        if (item.product && item.product._id) {
+          const product = await Product.findById(item.product._id);
+          if (product) {
+            // Check if this email already has feedback for this product
+            const productFeedbackExists = product.feedbacks.some(
+              (fb) => String(fb.submittedByEmail || "").toLowerCase() === normalizedEmail
+            );
+
+            if (!productFeedbackExists) {
+              product.feedbacks.push({
+                rating: normalizedRating,
+                message: String(message || "").trim(),
+                submittedByEmail: normalizedEmail,
+                isVisible: true,
+              });
+              await product.save();
+            }
+          }
+        }
+      }
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: "Feedback submitted successfully",
+      data: feedbackData,
+    });
   } catch (error) {
     return next(error);
   }
