@@ -1,5 +1,18 @@
 const Product = require("../models/Product");
 
+const buildSalePricing = (basePrice, onSale, salePercent) => {
+  const normalizedPrice = Number(basePrice);
+  const normalizedPercent = Math.min(100, Math.max(0, Number(salePercent || 0)));
+  const salePrice = onSale
+    ? Number((normalizedPrice * (1 - normalizedPercent / 100)).toFixed(2))
+    : normalizedPrice;
+
+  return {
+    salePercent: onSale ? normalizedPercent : 0,
+    salePrice,
+  };
+};
+
 const getProducts = async (req, res, next) => {
   try {
     const products = await Product.find().sort({ createdAt: -1 });
@@ -11,7 +24,7 @@ const getProducts = async (req, res, next) => {
 
 const addProduct = async (req, res, next) => {
   try {
-    const { name, description, price, category, image, inStock } = req.body;
+    const { name, description, price, stockCount, onSale, salePercent, category, image, inStock } = req.body;
 
     if (!name || price === undefined) {
       return res.status(400).json({
@@ -20,13 +33,37 @@ const addProduct = async (req, res, next) => {
       });
     }
 
+    const numericPrice = Number(price);
+    const numericStockCount = Number(stockCount ?? 0);
+
+    if (Number.isNaN(numericPrice) || numericPrice < 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Price must be a valid positive number",
+      });
+    }
+
+    if (Number.isNaN(numericStockCount) || numericStockCount < 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Stock count must be 0 or more",
+      });
+    }
+
+    const isOnSale = Boolean(onSale);
+    const pricing = buildSalePricing(numericPrice, isOnSale, salePercent);
+
     const product = await Product.create({
       name,
       description,
-      price,
+      price: numericPrice,
+      stockCount: numericStockCount,
+      onSale: isOnSale,
+      salePercent: pricing.salePercent,
+      salePrice: pricing.salePrice,
       category,
       image,
-      inStock,
+      inStock: inStock !== undefined ? inStock : numericStockCount > 0,
       createdBy: req.admin._id,
     });
 
@@ -39,7 +76,7 @@ const addProduct = async (req, res, next) => {
 const editProduct = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, description, price, category, image, inStock } = req.body;
+    const { name, description, price, stockCount, onSale, salePercent, category, image, inStock } = req.body;
 
     const product = await Product.findById(id);
     if (!product) {
@@ -51,10 +88,30 @@ const editProduct = async (req, res, next) => {
 
     product.name = name ?? product.name;
     product.description = description ?? product.description;
-    product.price = price ?? product.price;
+    product.price = price !== undefined ? Number(price) : product.price;
+    product.stockCount = stockCount !== undefined ? Number(stockCount) : product.stockCount;
+    product.onSale = onSale !== undefined ? Boolean(onSale) : product.onSale;
     product.category = category ?? product.category;
     product.image = image ?? product.image;
-    product.inStock = inStock ?? product.inStock;
+    product.inStock = inStock !== undefined ? inStock : product.stockCount > 0;
+
+    const pricing = buildSalePricing(product.price, product.onSale, salePercent ?? product.salePercent);
+    product.salePercent = pricing.salePercent;
+    product.salePrice = pricing.salePrice;
+
+    if (Number.isNaN(product.price) || product.price < 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Price must be a valid positive number",
+      });
+    }
+
+    if (Number.isNaN(product.stockCount) || product.stockCount < 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Stock count must be 0 or more",
+      });
+    }
 
     const updatedProduct = await product.save();
 

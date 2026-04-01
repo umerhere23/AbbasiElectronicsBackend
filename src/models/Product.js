@@ -17,6 +17,26 @@ const productSchema = new mongoose.Schema(
       required: true,
       min: 0,
     },
+    stockCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    onSale: {
+      type: Boolean,
+      default: false,
+    },
+    salePercent: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
+    },
+    salePrice: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     category: {
       type: String,
       trim: true,

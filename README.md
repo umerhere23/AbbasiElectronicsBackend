@@ -32,9 +32,53 @@ src/
 - `GET /api/health` -> Server health check
 - `GET /api/users` -> List all users
 - `POST /api/users` -> Create user
+- `POST /api/admin/register` -> Register admin
+- `POST /api/admin/login` -> Login admin
+- `GET /api/admin/me` -> Current admin profile (Bearer token)
+- `GET /api/products` -> List products
+- `POST /api/products` -> Add product (Bearer token)
+- `PUT /api/products/:id` -> Edit product (Bearer token)
+- `GET /api/sales` -> List sales (Bearer token)
+- `POST /api/sales` -> Create sale (Bearer token)
+- `POST /api/upload/product-image` -> Upload product image (Bearer token, form-data with `image`)
 
 ### Create user body
 {
   "name": "John Doe",
   "email": "john@example.com"
+}
+
+### Register admin body
+{
+   "name": "Admin",
+   "email": "admin@example.com",
+   "password": "123456"
+}
+
+### Login admin body
+{
+   "email": "admin@example.com",
+   "password": "123456"
+}
+
+### Add product body
+{
+   "name": "Sample Product",
+   "description": "Good product",
+   "price": 99.99,
+   "stockCount": 10,
+   "onSale": true,
+   "salePercent": 15,
+   "category": "Electronics",
+   "image": "https://example.com/product.jpg",
+   "inStock": true
+}
+
+### Create sale body
+{
+   "productId": "PRODUCT_ID",
+   "quantity": 2,
+   "discountPercent": 10,
+   "customerName": "Ali",
+   "note": "Weekend deal"
 }
