@@ -631,6 +631,36 @@ const updateOrderStatus = async (req, res, next) => {
   }
 };
 
+const deleteOrder = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const order = await Order.findById(id);
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    let restoredQuantity = 0;
+    if (!order.isRestockedOnCancel) {
+      restoredQuantity = (order.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+      await restockOrderInventory(order, req.admin?._id || null);
+    }
+
+    await Order.findByIdAndDelete(id);
+
+    return res.status(200).json({
+      success: true,
+      message: "Order deleted successfully",
+      data: {
+        orderId: id,
+        restoredQuantity,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const getOrderById = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -782,6 +812,7 @@ module.exports = {
   confirmStripeOrder,
   getOrders,
   updateOrderStatus,
+  deleteOrder,
   getOrderById,
   trackOrder,
   submitOrderFeedback,

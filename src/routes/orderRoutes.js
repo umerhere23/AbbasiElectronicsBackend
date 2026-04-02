@@ -5,6 +5,7 @@ const {
 	confirmStripeOrder,
 	getOrders,
 	updateOrderStatus,
+	deleteOrder,
 	getOrderById,
 	trackOrder,
 	submitOrderFeedback,
@@ -21,5 +22,6 @@ router.get("/:id", getOrderById);
 router.post("/:id/feedback", submitOrderFeedback);
 router.get("/", protectAdmin, getOrders);
 router.put("/:id/status", protectAdmin, updateOrderStatus);
+router.delete("/:id", protectAdmin, deleteOrder);
 
 module.exports = router;
