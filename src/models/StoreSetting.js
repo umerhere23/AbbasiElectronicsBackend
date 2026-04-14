@@ -16,7 +16,7 @@ const storeSettingSchema = new mongoose.Schema(
     whatsappNumber: {
       type: String,
       trim: true,
-      default: "923199940202",
+      default: "923085067642",
     },
   },
   {
