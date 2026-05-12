@@ -2,6 +2,10 @@ const { Op } = require("sequelize");
 const { Product, Category, Brand, ProductFeedback } = require("../models");
 const { recordInventoryLog } = require("../utils/inventoryLogger");
 
+const isUUID = (val) => {
+  if (!val || typeof val !== "string") return false;
+  return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(val);
+};
 const buildSalePricing = (basePrice, onSale, salePercent) => {
   const normalizedPrice = Number(basePrice);
   const normalizedPercent = Math.min(100, Math.max(0, Number(salePercent || 0)));
@@ -107,6 +111,14 @@ const getSaleItems = async (req, res, next) => {
 const getProductById = async (req, res, next) => {
   try {
     const { id } = req.params;
+
+    if (!isUUID(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid product id is required",
+      });
+    }
+
     const product = await Product.findByPk(id);
 
     if (!product) {
@@ -169,24 +181,40 @@ const addProduct = async (req, res, next) => {
     let categoryRef = null;
 
     if (categoryId) {
-      const categoryDoc = await Category.findByPk(categoryId);
-      if (!categoryDoc) {
-        return res.status(400).json({ success: false, message: "Invalid category selected" });
+      let categoryDoc = null;
+      if (isUUID(categoryId)) {
+        categoryDoc = await Category.findByPk(categoryId);
+      } else {
+        categoryDoc = await Category.findOne({ where: { name: categoryId } });
       }
-      categoryName = categoryDoc.name;
-      categoryRef = categoryDoc.id;
+
+      if (!categoryDoc) {
+        categoryName = categoryId;
+        categoryRef = null;
+      } else {
+        categoryName = categoryDoc.name;
+        categoryRef = categoryDoc.id;
+      }
     }
 
     let brandName = brand || "";
     let brandRef = null;
 
     if (brandId) {
-      const brandDoc = await Brand.findByPk(brandId);
-      if (!brandDoc) {
-        return res.status(400).json({ success: false, message: "Invalid brand selected" });
+      let brandDoc = null;
+      if (isUUID(brandId)) {
+        brandDoc = await Brand.findByPk(brandId);
+      } else {
+        brandDoc = await Brand.findOne({ where: { name: brandId } });
       }
-      brandName = brandDoc.name;
-      brandRef = brandDoc.id;
+
+      if (!brandDoc) {
+        brandName = brandId;
+        brandRef = null;
+      } else {
+        brandName = brandDoc.name;
+        brandRef = brandDoc.id;
+      }
     }
 
     const product = await Product.create({
@@ -230,6 +258,13 @@ const editProduct = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, description, price, stockCount, onSale, salePercent, category, categoryId, brand, brandId, image, size } = req.body;
+
+    if (!isUUID(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid product id is required",
+      });
+    }
 
     const product = await Product.findByPk(id);
     if (!product) {
@@ -277,22 +312,38 @@ const editProduct = async (req, res, next) => {
     product.stockCount = nextStockCount;
     product.onSale = nextOnSale;
     if (categoryId) {
-      const categoryDoc = await Category.findByPk(categoryId);
-      if (!categoryDoc) {
-        return res.status(400).json({ success: false, message: "Invalid category selected" });
+      let categoryDoc = null;
+      if (isUUID(categoryId)) {
+        categoryDoc = await Category.findByPk(categoryId);
+      } else {
+        categoryDoc = await Category.findOne({ where: { name: categoryId } });
       }
-      product.categoryId = categoryDoc.id;
-      product.category = categoryDoc.name;
+
+      if (!categoryDoc) {
+        product.category = categoryId;
+        product.categoryId = null;
+      } else {
+        product.categoryId = categoryDoc.id;
+        product.category = categoryDoc.name;
+      }
     } else {
       product.category = category ?? product.category;
     }
     if (brandId) {
-      const brandDoc = await Brand.findByPk(brandId);
-      if (!brandDoc) {
-        return res.status(400).json({ success: false, message: "Invalid brand selected" });
+      let brandDoc = null;
+      if (isUUID(brandId)) {
+        brandDoc = await Brand.findByPk(brandId);
+      } else {
+        brandDoc = await Brand.findOne({ where: { name: brandId } });
       }
-      product.brandId = brandDoc.id;
-      product.brand = brandDoc.name;
+
+      if (!brandDoc) {
+        product.brand = brandId;
+        product.brandId = null;
+      } else {
+        product.brandId = brandDoc.id;
+        product.brand = brandDoc.name;
+      }
     } else {
       product.brand = brand ?? product.brand;
     }
@@ -330,6 +381,14 @@ const editProduct = async (req, res, next) => {
 const deleteProduct = async (req, res, next) => {
   try {
     const { id } = req.params;
+
+    if (!isUUID(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid product id is required",
+      });
+    }
+
     const deletedProduct = await Product.findByPk(id);
 
     if (!deletedProduct) {
@@ -390,6 +449,12 @@ const deleteAllProducts = async (req, res, next) => {
 const updateProductStock = async (req, res, next) => {
   try {
     const { id } = req.params;
+    if (!isUUID(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid product id is required",
+      });
+    }
     const { adjustment, note } = req.body;
 
     const numericAdjustment = Number(adjustment);

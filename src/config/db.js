@@ -32,10 +32,11 @@ const connectDB = async () => {
       
       // Import all models (this defines them with sequelize)
       require("../models");
-      
-      // Auto-sync tables (creates tables if they don't exist, alter: true updates them)
-      await sequelize.sync({ alter: true });
-      console.log("Database tables synchronized successfully");
+
+      if (process.env.DB_AUTO_SYNC_ON_STARTUP === "true") {
+        await sequelize.sync({ alter: true });
+        console.log("Database tables synchronized successfully");
+      }
       return sequelize;
     } catch (error) {
       const isLastAttempt = attempt === maxRetries;
