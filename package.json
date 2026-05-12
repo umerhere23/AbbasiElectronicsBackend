@@ -1,7 +1,7 @@
 {
   "name": "abbasi-backend",
   "version": "1.0.0",
-  "description": "Backend server with MVC architecture, MongoDB, and Nodemon",
+  "description": "Backend server with MVC architecture, PostgreSQL, and Nodemon",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
@@ -13,7 +13,7 @@
     "node",
     "express",
     "mvc",
-    "mongodb"
+    "postgresql"
   ],
   "author": "",
   "license": "ISC",
@@ -23,7 +23,9 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.5.1",
+    "sequelize": "^6.35.2",
+    "pg": "^8.11.3",
+    "pg-hstore": "^2.3.4",
     "morgan": "^1.10.0",
     "multer": "^2.0.2",
     "nodemailer": "^8.0.4",

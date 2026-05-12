@@ -1,4 +1,4 @@
-const ContactMessage = require("../models/ContactMessage");
+const { ContactMessage } = require("../models");
 
 const createContactMessage = async (req, res, next) => {
   try {
@@ -30,7 +30,7 @@ const createContactMessage = async (req, res, next) => {
       success: true,
       message: "Message sent successfully",
       data: {
-        id: savedMessage._id,
+        id: savedMessage.id,
         createdAt: savedMessage.createdAt,
       },
     });
@@ -41,7 +41,7 @@ const createContactMessage = async (req, res, next) => {
 
 const getContactMessages = async (req, res, next) => {
   try {
-    const messages = await ContactMessage.find({}).sort({ createdAt: -1 });
+    const messages = await ContactMessage.findAll({ order: [["createdAt", "DESC"]] });
     return res.status(200).json({
       success: true,
       count: messages.length,

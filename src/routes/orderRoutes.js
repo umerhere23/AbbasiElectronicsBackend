@@ -1,8 +1,6 @@
 const express = require("express");
 const {
 	createOrder,
-	createStripeSession,
-	confirmStripeOrder,
 	getOrders,
 	updateOrderStatus,
 	deleteOrder,
@@ -15,8 +13,6 @@ const { protectAdmin } = require("../middlewares/authMiddleware");
 const router = express.Router();
 
 router.post("/", createOrder);
-router.post("/stripe/session", createStripeSession);
-router.post("/stripe/confirm", confirmStripeOrder);
 router.get("/track", trackOrder);
 router.get("/:id", getOrderById);
 router.post("/:id/feedback", submitOrderFeedback);

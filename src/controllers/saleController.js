@@ -1,5 +1,5 @@
-const Product = require("../models/Product");
-const Sale = require("../models/Sale");
+const { Op } = require("sequelize");
+const { Product, Sale, Admin } = require("../models");
 const { recordInventoryLog } = require("../utils/inventoryLogger");
 
 const normalizeSaleItems = (body) => {
@@ -20,10 +20,13 @@ const normalizeSaleItems = (body) => {
 
 const getSales = async (req, res, next) => {
   try {
-    const sales = await Sale.find()
-      .populate("product", "name category")
-      .populate("soldBy", "name email")
-      .sort({ createdAt: -1 });
+    const sales = await Sale.findAll({
+      include: [
+        { model: Product, as: "product", attributes: ["id", "name", "category"] },
+        { model: Admin, as: "soldByUser", attributes: ["id", "name", "email"] },
+      ],
+      order: [["createdAt", "DESC"]],
+    });
 
     res.status(200).json({ success: true, data: sales });
   } catch (error) {
@@ -44,8 +47,8 @@ const createSale = async (req, res, next) => {
     }
 
     const productIds = [...new Set(items.map((item) => String(item.productId || "")))].filter(Boolean);
-    const productDocs = await Product.find({ _id: { $in: productIds } });
-    const productMap = new Map(productDocs.map((product) => [String(product._id), product]));
+    const productDocs = await Product.findAll({ where: { id: { [Op.in]: productIds } } });
+    const productMap = new Map(productDocs.map((product) => [String(product.id), product]));
 
     const groupedQuantities = new Map();
     const preparedItems = [];
@@ -101,15 +104,16 @@ const createSale = async (req, res, next) => {
 
     for (const item of preparedItems) {
       const sale = await Sale.create({
-        product: item.product._id,
-        quantity: item.quantity,
+        productId: item.product.id,
+        productName: item.product.name,
+        quantitySold: item.quantity,
         unitPrice: item.product.price,
         discountPercent: item.discountPercent,
         finalUnitPrice: item.finalUnitPrice,
         totalAmount: item.totalAmount,
         customerName,
         note,
-        soldBy: req.admin._id,
+        soldBy: req.admin?.id || req.admin?._id || null,
         saleGroupId,
       });
 
@@ -128,24 +132,28 @@ const createSale = async (req, res, next) => {
       await item.product.save();
 
       await recordInventoryLog({
-        productId: item.product._id,
+        productId: item.product.id,
         type: "sale",
         quantityChange: -item.quantity,
         previousStock,
         newStock: Number(item.product.stockCount || 0),
         note: "Stock reduced via manual sale entry",
         referenceType: "sale",
-        referenceId: String(sale._id),
-        performedBy: req.admin._id,
+        referenceId: String(sale.id),
+        performedBy: req.admin?.id || req.admin?._id || null,
       });
 
-      createdSales.push(sale._id);
+      createdSales.push(sale.id);
     }
 
-    const populatedSales = await Sale.find({ _id: { $in: createdSales } })
-      .populate("product", "name category")
-      .populate("soldBy", "name email")
-      .sort({ createdAt: -1 });
+    const populatedSales = await Sale.findAll({
+      where: { id: { [Op.in]: createdSales } },
+      include: [
+        { model: Product, as: "product", attributes: ["id", "name", "category"] },
+        { model: Admin, as: "soldByUser", attributes: ["id", "name", "email"] },
+      ],
+      order: [["createdAt", "DESC"]],
+    });
 
     const grandTotal = populatedSales.reduce((sum, sale) => sum + Number(sale.totalAmount || 0), 0);
 
@@ -165,11 +173,11 @@ const createSale = async (req, res, next) => {
 
 const deleteAllSales = async (req, res, next) => {
   try {
-    const result = await Sale.deleteMany({});
+    const result = await Sale.destroy({ where: {} });
     res.status(200).json({
       success: true,
-      message: `${result.deletedCount} sale(s) deleted successfully`,
-      data: { deletedCount: result.deletedCount },
+      message: `${result} sale(s) deleted successfully`,
+      data: { deletedCount: result },
     });
   } catch (error) {
     next(error);
@@ -181,13 +189,18 @@ const updateSale = async (req, res, next) => {
     const { saleId } = req.params;
     const { quantity, discountPercent } = req.body;
 
-    const sale = await Sale.findById(saleId).populate("product");
+    const sale = await Sale.findByPk(saleId);
     if (!sale) {
       return res.status(404).json({ success: false, message: "Sale not found" });
     }
 
+    const product = await Product.findByPk(sale.productId || sale.product);
+    if (!product) {
+      return res.status(404).json({ success: false, message: "Product not found" });
+    }
+
     const newQuantity = Number(quantity);
-    const newDiscount = Number(discountPercent !== undefined ? discountPercent : sale.discountPercent);
+    const newDiscount = Number(discountPercent !== undefined ? discountPercent : sale.discountPercent || 0);
 
     if (isNaN(newQuantity) || newQuantity < 1) {
       return res.status(400).json({ success: false, message: "Quantity must be at least 1" });
@@ -197,8 +210,8 @@ const updateSale = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Discount must be between 0-100" });
     }
 
-    const product = sale.product;
-    const quantityDifference = newQuantity - sale.quantity;
+    const saleQuantity = Number(sale.quantity || sale.quantitySold || 0);
+    const quantityDifference = newQuantity - saleQuantity;
 
     // Check if new quantity requires additional stock
     if (quantityDifference > 0) {
@@ -224,10 +237,12 @@ const updateSale = async (req, res, next) => {
       product.salePrice = Number((product.price * (1 - newDiscount / 100)).toFixed(2));
     } else if (newDiscount === 0 && sale.discountPercent > 0) {
       // If discount was removed, unset sale flags if no other sales have discount
-      const otherSales = await Sale.find({
-        product: product._id,
-        _id: { $ne: saleId },
-        discountPercent: { $gt: 0 },
+      const otherSales = await Sale.findAll({
+        where: {
+          productId: product.id,
+          id: { [Op.ne]: saleId },
+          discountPercent: { [Op.gt]: 0 },
+        },
       });
       if (!otherSales.length) {
         product.onSale = false;
@@ -241,6 +256,7 @@ const updateSale = async (req, res, next) => {
 
     // Update sale
     sale.quantity = newQuantity;
+    sale.quantitySold = newQuantity;
     sale.discountPercent = newDiscount;
     const newFinalUnitPrice = Number((product.price * (1 - newDiscount / 100)).toFixed(2));
     sale.finalUnitPrice = newFinalUnitPrice;
@@ -249,7 +265,7 @@ const updateSale = async (req, res, next) => {
 
     // Record inventory change
     await recordInventoryLog({
-      productId: product._id,
+      productId: product.id,
       type: "adjustment",
       quantityChange: -quantityDifference,
       previousStock,
@@ -257,12 +273,15 @@ const updateSale = async (req, res, next) => {
       note: `Sale quantity updated from ${sale.quantity} to ${newQuantity}, discount ${newDiscount}%`,
       referenceType: "sale",
       referenceId: String(saleId),
-      performedBy: req.admin._id,
+      performedBy: req.admin?.id || req.admin?._id || null,
     });
 
-    const updatedSale = await Sale.findById(saleId)
-      .populate("product", "name category")
-      .populate("soldBy", "name email");
+    const updatedSale = await Sale.findByPk(saleId, {
+      include: [
+        { model: Product, as: "product", attributes: ["id", "name", "category"] },
+        { model: Admin, as: "soldByUser", attributes: ["id", "name", "email"] },
+      ],
+    });
 
     res.status(200).json({
       success: true,
@@ -278,25 +297,31 @@ const deleteSale = async (req, res, next) => {
   try {
     const { saleId } = req.params;
 
-    const sale = await Sale.findById(saleId).populate("product");
+    const sale = await Sale.findByPk(saleId);
     if (!sale) {
       return res.status(404).json({ success: false, message: "Sale not found" });
     }
 
-    const product = sale.product;
+    const product = await Product.findByPk(sale.productId || sale.product);
+    if (!product) {
+      return res.status(404).json({ success: false, message: "Product not found" });
+    }
     const previousStock = Number(product.stockCount || 0);
 
     // Restock the inventory
-    product.stockCount = Number(product.stockCount || 0) + sale.quantity;
-    product.soldCount = Math.max(0, Number(product.soldCount || 0) - sale.quantity);
+    const saleQuantity = Number(sale.quantity || sale.quantitySold || 0);
+    product.stockCount = Number(product.stockCount || 0) + saleQuantity;
+    product.soldCount = Math.max(0, Number(product.soldCount || 0) - saleQuantity);
     product.inStock = product.stockCount > 0;
 
     // If this was the only sale with a discount, remove discount flags
     if (sale.discountPercent > 0) {
-      const otherSalesWithDiscount = await Sale.find({
-        product: product._id,
-        _id: { $ne: saleId },
-        discountPercent: { $gt: 0 },
+      const otherSalesWithDiscount = await Sale.findAll({
+        where: {
+          productId: product.id,
+          id: { [Op.ne]: saleId },
+          discountPercent: { [Op.gt]: 0 },
+        },
       });
       if (!otherSalesWithDiscount.length) {
         product.onSale = false;
@@ -309,24 +334,24 @@ const deleteSale = async (req, res, next) => {
 
     // Record inventory log
     await recordInventoryLog({
-      productId: product._id,
+      productId: product.id,
       type: "reversal",
-      quantityChange: sale.quantity,
+      quantityChange: saleQuantity,
       previousStock,
       newStock: Number(product.stockCount || 0),
-      note: `Sale deleted - inventory restored (${sale.quantity} unit(s))`,
+      note: `Sale deleted - inventory restored (${saleQuantity} unit(s))`,
       referenceType: "sale",
       referenceId: String(saleId),
-      performedBy: req.admin._id,
+      performedBy: req.admin?.id || req.admin?._id || null,
     });
 
     // Delete the sale
-    await Sale.findByIdAndDelete(saleId);
+    await sale.destroy();
 
     res.status(200).json({
       success: true,
       message: "Sale deleted successfully and inventory restored",
-      data: { deletedSaleId: saleId, restoredQuantity: sale.quantity },
+      data: { deletedSaleId: saleId, restoredQuantity: saleQuantity },
     });
   } catch (error) {
     next(error);

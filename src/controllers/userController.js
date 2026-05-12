@@ -1,8 +1,8 @@
-const User = require("../models/User");
+const { User } = require("../models");
 
 const getUsers = async (req, res, next) => {
   try {
-    const users = await User.find().sort({ createdAt: -1 });
+    const users = await User.findAll({ order: [["createdAt", "DESC"]] });
     res.status(200).json({ success: true, data: users });
   } catch (error) {
     next(error);
@@ -20,7 +20,7 @@ const createUser = async (req, res, next) => {
       });
     }
 
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ where: { email } });
     if (existingUser) {
       return res.status(409).json({
         success: false,

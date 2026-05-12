@@ -1,9 +1,9 @@
-const StoreSetting = require("../models/StoreSetting");
+const { StoreSetting } = require("../models");
 
 const DEFAULT_KEY = "default";
 
 const getOrCreateSettings = async () => {
-  let settings = await StoreSetting.findOne({ key: DEFAULT_KEY });
+  let settings = await StoreSetting.findOne({ where: { key: DEFAULT_KEY } });
 
   if (!settings) {
     settings = await StoreSetting.create({ key: DEFAULT_KEY });
@@ -61,7 +61,8 @@ const updateAdminSettings = async (req, res, next) => {
       settings.whatsappNumber = String(whatsappNumber || "").trim();
     }
 
-    const saved = await settings.save();
+    await settings.save();
+    const saved = await settings.reload();
 
     return res.status(200).json({
       success: true,

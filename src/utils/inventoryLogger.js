@@ -1,4 +1,4 @@
-const InventoryLog = require("../models/InventoryLog");
+const { InventoryLog } = require("../models");
 
 const recordInventoryLog = async ({
   productId,

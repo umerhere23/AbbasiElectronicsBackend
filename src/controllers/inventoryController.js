@@ -1,4 +1,4 @@
-const InventoryLog = require("../models/InventoryLog");
+const { InventoryLog } = require("../models");
 
 const getInventoryLogs = async (req, res, next) => {
   try {
@@ -12,11 +12,11 @@ const getInventoryLogs = async (req, res, next) => {
       filter.type = type;
     }
 
-    const logs = await InventoryLog.find(filter)
-      .populate("product", "name category")
-      .populate("performedBy", "name email")
-      .sort({ createdAt: -1 })
-      .limit(300);
+    const logs = await InventoryLog.findAll({
+      where: filter,
+      order: [["createdAt", "DESC"]],
+      limit: 300,
+    });
 
     const filteredLogs = search
       ? logs.filter((log) => {

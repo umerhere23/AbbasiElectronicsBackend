@@ -1,10 +1,6 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const Admin = require("../models/Admin");
-const Product = require("../models/Product");
-const Sale = require("../models/Sale");
-const Order = require("../models/Order");
-const InventoryLog = require("../models/InventoryLog");
+const { Admin, Product, Sale, Order, InventoryLog } = require("../models");
 
 const createToken = (adminId) => {
   return jwt.sign({ id: adminId }, process.env.JWT_SECRET, { expiresIn: "7d" });
@@ -21,7 +17,7 @@ const registerAdmin = async (req, res, next) => {
       });
     }
 
-    const existingAdmin = await Admin.findOne({ email });
+    const existingAdmin = await Admin.findOne({ where: { email } });
     if (existingAdmin) {
       return res.status(409).json({
         success: false,
@@ -39,11 +35,11 @@ const registerAdmin = async (req, res, next) => {
     res.status(201).json({
       success: true,
       data: {
-        _id: admin._id,
+        id: admin.id,
         name: admin.name,
         email: admin.email,
         role: admin.role,
-        token: createToken(admin._id),
+        token: createToken(admin.id),
       },
     });
   } catch (error) {
@@ -62,7 +58,7 @@ const loginAdmin = async (req, res, next) => {
       });
     }
 
-    const admin = await Admin.findOne({ email });
+    const admin = await Admin.findOne({ where: { email } });
     if (!admin) {
       return res.status(401).json({
         success: false,
@@ -81,11 +77,11 @@ const loginAdmin = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: {
-        _id: admin._id,
+        id: admin.id,
         name: admin.name,
         email: admin.email,
         role: admin.role,
-        token: createToken(admin._id),
+        token: createToken(admin.id),
       },
     });
   } catch (error) {
@@ -95,7 +91,9 @@ const loginAdmin = async (req, res, next) => {
 
 const getAdminProfile = async (req, res, next) => {
   try {
-    const admin = await Admin.findById(req.admin._id).select("-password");
+    const admin = await Admin.findByPk(req.admin.id, {
+      attributes: { exclude: ["password"] },
+    });
 
     if (!admin) {
       return res.status(404).json({
@@ -113,10 +111,10 @@ const getAdminProfile = async (req, res, next) => {
 const getAdminOverview = async (req, res, next) => {
   try {
     const [products, sales, orders, inventoryLogs] = await Promise.all([
-      Product.find().sort({ createdAt: -1 }),
-      Sale.find().populate("product", "name category").sort({ createdAt: -1 }),
-      Order.find().sort({ createdAt: -1 }),
-      InventoryLog.find().sort({ createdAt: -1 }).limit(50),
+      Product.findAll({ order: [["createdAt", "DESC"]] }),
+      Sale.findAll({ order: [["createdAt", "DESC"]] }),
+      Order.findAll({ order: [["createdAt", "DESC"]] }),
+      InventoryLog.findAll({ order: [["createdAt", "DESC"]], limit: 50 }),
     ]);
 
     const totalSalesAmount = sales.reduce((sum, sale) => sum + Number(sale.totalAmount || 0), 0);
@@ -147,7 +145,7 @@ const getAdminOverview = async (req, res, next) => {
 
     const topSellingProducts = products
       .map((product) => ({
-        _id: product._id,
+        id: product.id,
         name: product.name,
         soldCount: Number(product.soldCount || 0),
         stockCount: Number(product.stockCount || 0),

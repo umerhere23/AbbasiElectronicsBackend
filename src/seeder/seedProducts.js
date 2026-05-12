@@ -1,7 +1,6 @@
 const dotenv = require("dotenv");
-const connectDB = require("../config/db");
-const Admin = require("../models/Admin");
-const Product = require("../models/Product");
+const { connectDB } = require("../config/db");
+const { Admin, Product } = require("../models");
 
 dotenv.config();
 
@@ -33,7 +32,7 @@ const seedProducts = async () => {
     await connectDB();
 
     const adminEmail = process.env.SUPER_ADMIN_EMAIL || "superadmin@abbasi.com";
-    const admin = await Admin.findOne({ email: adminEmail }) || (await Admin.findOne());
+    const admin = (await Admin.findOne({ where: { email: adminEmail } })) || (await Admin.findOne());
 
     if (!admin) {
       throw new Error("No admin found. Run seed:admin first.");
@@ -44,17 +43,21 @@ const seedProducts = async () => {
         ? Number((template.price * (1 - template.salePercent / 100)).toFixed(2))
         : template.price;
 
-      await Product.findOneAndUpdate(
-        { name: template.name },
-        {
-          ...template,
-          salePrice,
-          inStock: template.stockCount > 0,
-          image: `https://picsum.photos/seed/${encodeURIComponent(template.name)}/800/600`,
-          createdBy: admin._id,
-        },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
-      );
+      const values = {
+        ...template,
+        salePrice,
+        inStock: template.stockCount > 0,
+        image: `https://picsum.photos/seed/${encodeURIComponent(template.name)}/800/600`,
+        createdBy: admin.id,
+      };
+
+      const existingProduct = await Product.findOne({ where: { name: template.name } });
+
+      if (existingProduct) {
+        await existingProduct.update(values);
+      } else {
+        await Product.create(values);
+      }
     }
 
     console.log(`Seeded ${productTemplates.length} products.`);

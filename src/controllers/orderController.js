@@ -1,13 +1,14 @@
-const Stripe = require("stripe");
 const nodemailer = require("nodemailer");
-const Order = require("../models/Order");
-const Product = require("../models/Product");
-const StoreSetting = require("../models/StoreSetting");
-const StripeCheckout = require("../models/StripeCheckout");
+const { Op } = require("sequelize");
+const {
+  Order,
+  OrderItem,
+  OrderFeedback,
+  Product,
+  ProductFeedback,
+  StoreSetting,
+} = require("../models");
 const { recordInventoryLog } = require("../utils/inventoryLogger");
-
-const stripeSecret = process.env.STRIPE_SECRET_KEY || "";
-const stripe = stripeSecret ? new Stripe(stripeSecret) : null;
 
 const buildInvoiceHtml = (order) => {
   const statusLabel = String(order.status || "pending").toUpperCase();
@@ -41,7 +42,7 @@ const buildInvoiceHtml = (order) => {
       <div style="background:#ffffff;border:1px solid #d9e4f2;border-top:0;border-radius:0 0 12px 12px;padding:16px;">
         <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
           <div>
-            <p style="margin:0 0 4px;"><strong>Order ID:</strong> ${order._id}</p>
+            <p style="margin:0 0 4px;"><strong>Order ID:</strong> ${order.id}</p>
             <p style="margin:0 0 4px;"><strong>Date:</strong> ${new Date(order.createdAt).toLocaleString()}</p>
             <p style="margin:0;"><strong>Customer:</strong> ${order.customerName}</p>
           </div>
@@ -109,7 +110,7 @@ const sendInvoiceEmail = async (order) => {
     await transporter.sendMail({
       from,
       to: order.customerEmail,
-      subject: `Invoice - Order ${order._id}`,
+      subject: `Invoice - Order ${order.id}`,
       html: buildInvoiceHtml(order),
     });
   } catch (error) {
@@ -137,7 +138,7 @@ const buildStatusUpdateHtml = (order, note = "") => {
       </div>
 
       <div style="background:#ffffff;border:1px solid #d9e4f2;border-top:0;border-radius:0 0 12px 12px;padding:16px;">
-        <p style="margin:0 0 6px;"><strong>Order ID:</strong> ${order._id}</p>
+        <p style="margin:0 0 6px;"><strong>Order ID:</strong> ${order.id}</p>
         <p style="margin:0 0 6px;"><strong>Customer:</strong> ${order.customerName}</p>
         <p style="margin:0 0 10px;"><strong>Updated At:</strong> ${new Date().toLocaleString()}</p>
 
@@ -176,7 +177,7 @@ const sendOrderStatusEmail = async (order, note = "") => {
     await transporter.sendMail({
       from,
       to: order.customerEmail,
-      subject: `Order Update - ${String(order.status || "pending").toUpperCase()} (${order._id})`,
+      subject: `Order Update - ${String(order.status || "pending").toUpperCase()} (${order.id})`,
       html: buildStatusUpdateHtml(order, note),
     });
   } catch (error) {
@@ -230,8 +231,8 @@ const validateOrderInput = ({ customerName, customerEmail, customerPhone, custom
 
 const prepareOrderItems = async (items) => {
   const productIds = items.map((item) => item.productId);
-  const productDocs = await Product.find({ _id: { $in: productIds } });
-  const productMap = new Map(productDocs.map((product) => [String(product._id), product]));
+  const productDocs = await Product.findAll({ where: { id: { [Op.in]: productIds } } });
+  const productMap = new Map(productDocs.map((product) => [String(product.id), product]));
 
   const normalizedItems = [];
   let subTotal = 0;
@@ -255,7 +256,7 @@ const prepareOrderItems = async (items) => {
     const lineTotal = Number((unitPrice * quantity).toFixed(2));
 
     normalizedItems.push({
-      product: product._id,
+      product: product.id,
       productName: product.name,
       quantity,
       unitPrice,
@@ -282,7 +283,6 @@ const applyInventoryAndCreateOrder = async ({
   note,
   paymentMethod,
   paymentStatus,
-  stripeSessionId,
   normalizedItems,
   deliveryCharge,
 }) => {
@@ -301,7 +301,6 @@ const applyInventoryAndCreateOrder = async ({
     customerPostalCode,
     paymentMethod,
     paymentStatus,
-    stripeSessionId: stripeSessionId || "",
     note,
     subTotal,
     deliveryCharge: Number(deliveryCharge || 0),
@@ -310,11 +309,22 @@ const applyInventoryAndCreateOrder = async ({
     statusHistory: [
       {
         status: "pending",
-        note: paymentMethod === "stripe" ? "Order created from paid Stripe checkout" : "Order placed",
+        note: "Order placed",
         changedBy: "system",
       },
     ],
   });
+
+  await OrderItem.bulkCreate(
+    orderItems.map((item) => ({
+      orderId: order.id,
+      productId: item._productDoc.id,
+      productName: item._productDoc.name,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      lineTotal: item.lineTotal,
+    }))
+  );
 
   for (const item of normalizedItems) {
     const product = item._productDoc;
@@ -325,24 +335,35 @@ const applyInventoryAndCreateOrder = async ({
     await product.save();
 
     await recordInventoryLog({
-      productId: product._id,
+      productId: product.id,
       type: paymentMethod === "stripe" ? "order" : "order",
       quantityChange: -item.quantity,
       previousStock,
       newStock: product.stockCount,
       note: paymentMethod === "stripe" ? "Paid Stripe order" : "COD order",
       referenceType: "order",
-      referenceId: String(order._id),
+      referenceId: String(order.id),
       performedBy: null,
     });
   }
 
-  return order;
+  return Order.findByPk(order.id, {
+    include: [
+      {
+        model: OrderItem,
+        as: "items",
+        include: [{ model: Product, attributes: ["id", "name", "category"] }],
+      },
+      { model: OrderFeedback, as: "feedbacks" },
+    ],
+  });
 };
 
 const restockOrderInventory = async (order, performedByAdminId = null) => {
-  for (const item of order.items || []) {
-    const product = await Product.findById(item.product);
+  const orderItems = await OrderItem.findAll({ where: { orderId: order.id } });
+
+  for (const item of orderItems) {
+    const product = await Product.findByPk(item.productId || item.product);
     if (!product) {
       continue;
     }
@@ -359,14 +380,14 @@ const restockOrderInventory = async (order, performedByAdminId = null) => {
     await product.save();
 
     await recordInventoryLog({
-      productId: product._id,
+      productId: product.id,
       type: "adjustment",
       quantityChange: quantity,
       previousStock,
       newStock: product.stockCount,
-      note: `Restocked due to order cancellation (${order._id})`,
+      note: `Restocked due to order cancellation (${order.id})`,
       referenceType: "order",
-      referenceId: String(order._id),
+      referenceId: String(order.id),
       performedBy: performedByAdminId,
     });
   }
@@ -383,13 +404,26 @@ const createOrder = async (req, res, next) => {
     if (data.paymentMethod && data.paymentMethod !== "cod") {
       return res.status(400).json({
         success: false,
-        message: "Use Stripe option for online payment",
+        message: "Only cash on delivery is supported",
       });
     }
 
     const { normalizedItems } = await prepareOrderItems(data.items);
-    const settings = await StoreSetting.findOne({ key: "default" });
-    const deliveryCharge = Number(settings?.deliveryCharge || 0);
+    const settings = await StoreSetting.findOne({ where: { key: "default" } });
+    
+    // Calculate delivery charge based on product sizes
+    let deliveryCharge = 0;
+    const hasSmall = normalizedItems.some(item => item._productDoc?.size === "small");
+    const hasBig = normalizedItems.some(item => item._productDoc?.size === "big");
+    
+    if (hasSmall && hasBig) {
+      // Mixed sizes - add both charges
+      deliveryCharge = Number(settings?.smallDeliveryCharge || 0) + Number(settings?.bigDeliveryCharge || 0);
+    } else if (hasSmall) {
+      deliveryCharge = Number(settings?.smallDeliveryCharge || 0);
+    } else if (hasBig) {
+      deliveryCharge = Number(settings?.bigDeliveryCharge || 0);
+    }
 
     const order = await applyInventoryAndCreateOrder({
       ...data,
@@ -411,168 +445,19 @@ const createOrder = async (req, res, next) => {
   }
 };
 
-const createStripeSession = async (req, res, next) => {
-  try {
-    if (!stripe) {
-      return res.status(500).json({
-        success: false,
-        message: "Stripe is not configured. Add STRIPE_SECRET_KEY in backend .env",
-      });
-    }
-
-    const data = normalizeOrderInput(req.body);
-    const validationMessage = validateOrderInput(data);
-    if (validationMessage) {
-      return res.status(400).json({ success: false, message: validationMessage });
-    }
-
-    const { normalizedItems, subTotal } = await prepareOrderItems(data.items);
-    const settings = await StoreSetting.findOne({ key: "default" });
-    const deliveryCharge = Number(settings?.deliveryCharge || 0);
-
-    const origin = req.body.clientBaseUrl || process.env.FRONTEND_URL || "http://localhost:5173";
-
-    const lineItems = normalizedItems.map((item) => ({
-      price_data: {
-        currency: "pkr",
-        product_data: {
-          name: item.productName,
-        },
-        unit_amount: Math.round(Number(item.unitPrice || 0) * 100),
-      },
-      quantity: item.quantity,
-    }));
-
-    if (deliveryCharge > 0) {
-      lineItems.push({
-        price_data: {
-          currency: "pkr",
-          product_data: {
-            name: "Delivery Charges",
-          },
-          unit_amount: Math.round(deliveryCharge * 100),
-        },
-        quantity: 1,
-      });
-    }
-
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      payment_method_types: ["card"],
-      line_items: lineItems,
-      success_url: `${origin}/cart?stripe=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/cart?stripe=cancel`,
-      customer_email: data.customerEmail,
-      metadata: {
-        customerName: data.customerName,
-        customerPhone: data.customerPhone,
-        customerAddress: data.customerAddress,
-      },
-    });
-
-    await StripeCheckout.create({
-      sessionId: session.id,
-      customerName: data.customerName,
-      customerEmail: data.customerEmail,
-      customerPhone: data.customerPhone,
-      customerAddress: data.customerAddress,
-      customerCity: data.customerCity,
-      customerPostalCode: data.customerPostalCode,
-      note: data.note,
-      items: normalizedItems.map((item) => ({
-        productId: item.product,
-        quantity: item.quantity,
-      })),
-    });
-
-    return res.status(200).json({
-      success: true,
-      data: {
-        url: session.url,
-        sessionId: session.id,
-        subTotal,
-        deliveryCharge,
-        totalAmount: Number((subTotal + deliveryCharge).toFixed(2)),
-      },
-    });
-  } catch (error) {
-    return next(error);
-  }
-};
-
-const confirmStripeOrder = async (req, res, next) => {
-  try {
-    if (!stripe) {
-      return res.status(500).json({ success: false, message: "Stripe is not configured" });
-    }
-
-    const { sessionId } = req.body;
-    if (!sessionId) {
-      return res.status(400).json({ success: false, message: "Session ID is required" });
-    }
-
-    const pending = await StripeCheckout.findOne({ sessionId });
-    if (!pending) {
-      return res.status(404).json({ success: false, message: "Stripe checkout session not found" });
-    }
-
-    if (pending.processed && pending.orderId) {
-      const existingOrder = await Order.findById(pending.orderId);
-      return res.status(200).json({ success: true, data: existingOrder });
-    }
-
-    const session = await stripe.checkout.sessions.retrieve(sessionId);
-    if (session.payment_status !== "paid") {
-      return res.status(400).json({
-        success: false,
-        message: "Payment is not completed for this Stripe session",
-      });
-    }
-
-    const { normalizedItems } = await prepareOrderItems(
-      pending.items.map((item) => ({
-        productId: item.productId,
-        quantity: item.quantity,
-      }))
-    );
-
-    const settings = await StoreSetting.findOne({ key: "default" });
-    const deliveryCharge = Number(settings?.deliveryCharge || 0);
-
-    const order = await applyInventoryAndCreateOrder({
-      customerName: pending.customerName,
-      customerEmail: pending.customerEmail,
-      customerPhone: pending.customerPhone,
-      customerAddress: pending.customerAddress,
-      customerCity: pending.customerCity,
-      customerPostalCode: pending.customerPostalCode,
-      note: pending.note,
-      paymentMethod: "stripe",
-      paymentStatus: "paid",
-      stripeSessionId: sessionId,
-      normalizedItems,
-      deliveryCharge,
-    });
-
-    pending.processed = true;
-    pending.orderId = order._id;
-    await pending.save();
-
-    await sendInvoiceEmail(order);
-
-    return res.status(200).json({
-      success: true,
-      message: "Stripe order confirmed successfully",
-      data: order,
-    });
-  } catch (error) {
-    return next(error);
-  }
-};
-
 const getOrders = async (req, res, next) => {
   try {
-    const orders = await Order.find({}).sort({ createdAt: -1 });
+    const orders = await Order.findAll({
+      include: [
+        {
+          model: OrderItem,
+          as: "items",
+          include: [{ model: Product, attributes: ["id", "name", "category"] }],
+        },
+        { model: OrderFeedback, as: "feedbacks" },
+      ],
+      order: [["createdAt", "DESC"]],
+    });
     return res.status(200).json({
       success: true,
       count: orders.length,
@@ -594,7 +479,16 @@ const updateOrderStatus = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Invalid order status" });
     }
 
-    const order = await Order.findById(id);
+    const order = await Order.findByPk(id, {
+      include: [
+        {
+          model: OrderItem,
+          as: "items",
+          include: [{ model: Product, attributes: ["id", "name", "category"] }],
+        },
+        { model: OrderFeedback, as: "feedbacks" },
+      ],
+    });
     if (!order) {
       return res.status(404).json({ success: false, message: "Order not found" });
     }
@@ -602,7 +496,7 @@ const updateOrderStatus = async (req, res, next) => {
     const previousStatus = order.status;
 
     if (status === "cancelled" && !order.isRestockedOnCancel) {
-      await restockOrderInventory(order, req.admin?._id || null);
+      await restockOrderInventory(order, req.admin?.id || req.admin?._id || null);
       order.isRestockedOnCancel = true;
     }
 
@@ -635,7 +529,16 @@ const deleteOrder = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const order = await Order.findById(id);
+    const order = await Order.findByPk(id, {
+      include: [
+        {
+          model: OrderItem,
+          as: "items",
+          include: [{ model: Product, attributes: ["id", "name", "category"] }],
+        },
+        { model: OrderFeedback, as: "feedbacks" },
+      ],
+    });
     if (!order) {
       return res.status(404).json({ success: false, message: "Order not found" });
     }
@@ -643,10 +546,10 @@ const deleteOrder = async (req, res, next) => {
     let restoredQuantity = 0;
     if (!order.isRestockedOnCancel) {
       restoredQuantity = (order.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
-      await restockOrderInventory(order, req.admin?._id || null);
+      await restockOrderInventory(order, req.admin?.id || req.admin?._id || null);
     }
 
-    await Order.findByIdAndDelete(id);
+    await order.destroy();
 
     return res.status(200).json({
       success: true,
@@ -670,7 +573,16 @@ const getOrderById = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Email is required" });
     }
 
-    const order = await Order.findById(id);
+    const order = await Order.findByPk(id, {
+      include: [
+        {
+          model: OrderItem,
+          as: "items",
+          include: [{ model: Product, attributes: ["id", "name", "category"] }],
+        },
+        { model: OrderFeedback, as: "feedbacks" },
+      ],
+    });
     if (!order) {
       return res.status(404).json({ success: false, message: "Order not found" });
     }
@@ -694,7 +606,16 @@ const trackOrder = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Order ID and email are required" });
     }
 
-    const order = await Order.findById(orderId);
+    const order = await Order.findByPk(orderId, {
+      include: [
+        {
+          model: OrderItem,
+          as: "items",
+          include: [{ model: Product, attributes: ["id", "name", "category"] }],
+        },
+        { model: OrderFeedback, as: "feedbacks" },
+      ],
+    });
     if (!order) {
       return res.status(404).json({ success: false, message: "Order not found" });
     }
@@ -706,7 +627,7 @@ const trackOrder = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       data: {
-        _id: order._id,
+        id: order.id,
         customerName: order.customerName,
         status: order.status,
         paymentMethod: order.paymentMethod,
@@ -740,7 +661,16 @@ const submitOrderFeedback = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Rating must be between 1 and 5" });
     }
 
-    const order = await Order.findById(id).populate("items.product");
+    const order = await Order.findByPk(id, {
+      include: [
+        {
+          model: OrderItem,
+          as: "items",
+          include: [{ model: Product, attributes: ["id", "name", "category"] }],
+        },
+        { model: OrderFeedback, as: "feedbacks" },
+      ],
+    });
     if (!order) {
       return res.status(404).json({ success: false, message: "Order not found" });
     }
@@ -750,7 +680,7 @@ const submitOrderFeedback = async (req, res, next) => {
     }
 
     // Check if user already submitted feedback for this order
-    const existingFeedback = order.feedbacks.find(
+    const existingFeedback = (order.feedbacks || []).find(
       (fb) => String(fb.submittedByEmail || "").toLowerCase() === normalizedEmail
     );
 
@@ -767,29 +697,35 @@ const submitOrderFeedback = async (req, res, next) => {
       message: String(message || "").trim(),
     };
 
-    // Add feedback to order
-    order.feedbacks.push(feedbackData);
-    await order.save();
+    await OrderFeedback.create({
+      orderId: order.id,
+      rating: normalizedRating,
+      message: String(message || "").trim(),
+      submittedByEmail: normalizedEmail,
+    });
 
     // Add feedback to all products in the order
     if (order.items && Array.isArray(order.items)) {
       for (const item of order.items) {
-        if (item.product && item.product._id) {
-          const product = await Product.findById(item.product._id);
+        const productId = item.productId || item.product?.id;
+        if (productId) {
+          const product = await Product.findByPk(productId);
           if (product) {
-            // Check if this email already has feedback for this product
-            const productFeedbackExists = product.feedbacks.some(
-              (fb) => String(fb.submittedByEmail || "").toLowerCase() === normalizedEmail
-            );
+            const productFeedbackExists = await ProductFeedback.findOne({
+              where: {
+                productId: product.id,
+                submittedByEmail: normalizedEmail,
+              },
+            });
 
             if (!productFeedbackExists) {
-              product.feedbacks.push({
+              await ProductFeedback.create({
+                productId: product.id,
                 rating: normalizedRating,
                 message: String(message || "").trim(),
                 submittedByEmail: normalizedEmail,
                 isVisible: true,
               });
-              await product.save();
             }
           }
         }
@@ -808,8 +744,6 @@ const submitOrderFeedback = async (req, res, next) => {
 
 module.exports = {
   createOrder,
-  createStripeSession,
-  confirmStripeOrder,
   getOrders,
   updateOrderStatus,
   deleteOrder,

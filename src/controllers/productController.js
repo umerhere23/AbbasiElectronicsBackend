@@ -1,6 +1,5 @@
-const Product = require("../models/Product");
-const Category = require("../models/Category");
-const Brand = require("../models/Brand");
+const { Op } = require("sequelize");
+const { Product, Category, Brand, ProductFeedback } = require("../models");
 const { recordInventoryLog } = require("../utils/inventoryLogger");
 
 const buildSalePricing = (basePrice, onSale, salePercent) => {
@@ -54,24 +53,24 @@ const getProducts = async (req, res, next) => {
     }
 
     if (stockStatus === "soldOut") {
-      filter.stockCount = { $lte: 0 };
+      filter.stockCount = { [Op.lte]: 0 };
     } else if (stockStatus === "low") {
-      filter.stockCount = { $gt: 0, $lte: 5 };
+      filter.stockCount = { [Op.gt]: 0, [Op.lte]: 5 };
     } else if (stockStatus === "inStock") {
-      filter.stockCount = { $gt: 0 };
+      filter.stockCount = { [Op.gt]: 0 };
     }
 
     if (search) {
-      filter.name = { $regex: search, $options: "i" };
+      filter.name = { [Op.iLike]: `%${search}%` };
     }
 
     if (minPrice || maxPrice) {
       filter.price = {};
       if (minPrice) {
-        filter.price.$gte = Number(minPrice);
+        filter.price[Op.gte] = Number(minPrice);
       }
       if (maxPrice) {
-        filter.price.$lte = Number(maxPrice);
+        filter.price[Op.lte] = Number(maxPrice);
       }
     }
 
@@ -84,9 +83,9 @@ const getProducts = async (req, res, next) => {
       nameDesc: { name: -1 },
     };
 
-    const sortQuery = sortMap[sort] || { createdAt: -1 };
+    const sortQuery = sortMap[sort] || [["createdAt", "DESC"]];
 
-    const products = await Product.find(filter).sort(sortQuery);
+    const products = await Product.findAll({ where: filter, order: sortQuery });
     res.status(200).json({ success: true, data: products });
   } catch (error) {
     next(error);
@@ -95,7 +94,10 @@ const getProducts = async (req, res, next) => {
 
 const getSaleItems = async (req, res, next) => {
   try {
-    const saleItems = await Product.find({ onSale: true }).sort({ createdAt: -1 });
+    const saleItems = await Product.findAll({
+      where: { onSale: true },
+      order: [["createdAt", "DESC"]],
+    });
     res.status(200).json({ success: true, data: saleItems });
   } catch (error) {
     next(error);
@@ -105,7 +107,7 @@ const getSaleItems = async (req, res, next) => {
 const getProductById = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const product = await Product.findById(id);
+    const product = await Product.findByPk(id);
 
     if (!product) {
       return res.status(404).json({
@@ -122,7 +124,7 @@ const getProductById = async (req, res, next) => {
 
 const addProduct = async (req, res, next) => {
   try {
-    const { name, description, price, stockCount, onSale, salePercent, category, categoryId, brand, brandId, image } = req.body;
+    const { name, description, price, stockCount, onSale, salePercent, category, categoryId, brand, brandId, image, size } = req.body;
 
     if (!name || price === undefined) {
       return res.status(400).json({
@@ -148,31 +150,43 @@ const addProduct = async (req, res, next) => {
       });
     }
 
+    // Validate size
+    const validSizes = ["small", "big"];
+    const normalizedSize = (size || "small").toLowerCase();
+    if (!validSizes.includes(normalizedSize)) {
+      return res.status(400).json({
+        success: false,
+        message: "Size must be 'small' or 'big'",
+      });
+    }
+
     const isOnSale = Boolean(onSale);
     const pricing = buildSalePricing(numericPrice, isOnSale, salePercent);
+
+    const adminId = req.admin?.id || req.admin?._id || null;
 
     let categoryName = category || "General";
     let categoryRef = null;
 
     if (categoryId) {
-      const categoryDoc = await Category.findById(categoryId);
+      const categoryDoc = await Category.findByPk(categoryId);
       if (!categoryDoc) {
         return res.status(400).json({ success: false, message: "Invalid category selected" });
       }
       categoryName = categoryDoc.name;
-      categoryRef = categoryDoc._id;
+      categoryRef = categoryDoc.id;
     }
 
     let brandName = brand || "";
     let brandRef = null;
 
     if (brandId) {
-      const brandDoc = await Brand.findById(brandId);
+      const brandDoc = await Brand.findByPk(brandId);
       if (!brandDoc) {
         return res.status(400).json({ success: false, message: "Invalid brand selected" });
       }
       brandName = brandDoc.name;
-      brandRef = brandDoc._id;
+      brandRef = brandDoc.id;
     }
 
     const product = await Product.create({
@@ -188,20 +202,21 @@ const addProduct = async (req, res, next) => {
       brand: brandName,
       brandId: brandRef,
       image,
-      createdBy: req.admin._id,
+      size: normalizedSize,
+      createdBy: adminId,
     });
 
     if (numericStockCount > 0) {
       await recordInventoryLog({
-        productId: product._id,
+        productId: product.id,
         type: "manual_add",
         quantityChange: numericStockCount,
         previousStock: 0,
         newStock: numericStockCount,
         note: "Initial stock at product creation",
         referenceType: "product",
-        referenceId: String(product._id),
-        performedBy: req.admin._id,
+        referenceId: String(product.id),
+        performedBy: adminId,
       });
     }
 
@@ -214,9 +229,9 @@ const addProduct = async (req, res, next) => {
 const editProduct = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, description, price, stockCount, onSale, salePercent, category, categoryId, brand, brandId, image } = req.body;
+    const { name, description, price, stockCount, onSale, salePercent, category, categoryId, brand, brandId, image, size } = req.body;
 
-    const product = await Product.findById(id);
+    const product = await Product.findByPk(id);
     if (!product) {
       return res.status(404).json({
         success: false,
@@ -225,28 +240,58 @@ const editProduct = async (req, res, next) => {
     }
 
     const previousStock = Number(product.stockCount || 0);
+    const nextPrice = price !== undefined ? Number(price) : Number(product.price);
+    const nextStockCount = stockCount !== undefined ? Number(stockCount) : Number(product.stockCount);
+    const nextOnSale = onSale !== undefined ? Boolean(onSale) : Boolean(product.onSale);
+
+    if (Number.isNaN(nextPrice) || nextPrice < 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Price must be a valid positive number",
+      });
+    }
+
+    if (Number.isNaN(nextStockCount) || nextStockCount < 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Stock count must be 0 or more",
+      });
+    }
+
+    // Validate size
+    if (size) {
+      const validSizes = ["small", "big"];
+      const normalizedSize = size.toLowerCase();
+      if (!validSizes.includes(normalizedSize)) {
+        return res.status(400).json({
+          success: false,
+          message: "Size must be 'small' or 'big'",
+        });
+      }
+      product.size = normalizedSize;
+    }
 
     product.name = name ?? product.name;
     product.description = description ?? product.description;
-    product.price = price !== undefined ? Number(price) : product.price;
-    product.stockCount = stockCount !== undefined ? Number(stockCount) : product.stockCount;
-    product.onSale = onSale !== undefined ? Boolean(onSale) : product.onSale;
+    product.price = nextPrice;
+    product.stockCount = nextStockCount;
+    product.onSale = nextOnSale;
     if (categoryId) {
-      const categoryDoc = await Category.findById(categoryId);
+      const categoryDoc = await Category.findByPk(categoryId);
       if (!categoryDoc) {
         return res.status(400).json({ success: false, message: "Invalid category selected" });
       }
-      product.categoryId = categoryDoc._id;
+      product.categoryId = categoryDoc.id;
       product.category = categoryDoc.name;
     } else {
       product.category = category ?? product.category;
     }
     if (brandId) {
-      const brandDoc = await Brand.findById(brandId);
+      const brandDoc = await Brand.findByPk(brandId);
       if (!brandDoc) {
         return res.status(400).json({ success: false, message: "Invalid brand selected" });
       }
-      product.brandId = brandDoc._id;
+      product.brandId = brandDoc.id;
       product.brand = brandDoc.name;
     } else {
       product.brand = brand ?? product.brand;
@@ -258,35 +303,21 @@ const editProduct = async (req, res, next) => {
     product.salePercent = pricing.salePercent;
     product.salePrice = pricing.salePrice;
 
-    if (Number.isNaN(product.price) || product.price < 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Price must be a valid positive number",
-      });
-    }
-
-    if (Number.isNaN(product.stockCount) || product.stockCount < 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Stock count must be 0 or more",
-      });
-    }
-
     const updatedProduct = await product.save();
 
     const newStock = Number(updatedProduct.stockCount || 0);
     const diff = newStock - previousStock;
     if (diff !== 0) {
       await recordInventoryLog({
-        productId: updatedProduct._id,
+        productId: updatedProduct.id,
         type: "adjustment",
         quantityChange: diff,
         previousStock,
         newStock,
         note: "Stock changed via product edit",
         referenceType: "product",
-        referenceId: String(updatedProduct._id),
-        performedBy: req.admin._id,
+        referenceId: String(updatedProduct.id),
+        performedBy: req.admin?.id || req.admin?._id || null,
       });
     }
 
@@ -299,7 +330,7 @@ const editProduct = async (req, res, next) => {
 const deleteProduct = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const deletedProduct = await Product.findByIdAndDelete(id);
+    const deletedProduct = await Product.findByPk(id);
 
     if (!deletedProduct) {
       return res.status(404).json({
@@ -307,6 +338,8 @@ const deleteProduct = async (req, res, next) => {
         message: "Product not found",
       });
     }
+
+    await deletedProduct.destroy();
 
     return res.status(200).json({
       success: true,
@@ -328,12 +361,12 @@ const deleteProductsBulk = async (req, res, next) => {
       });
     }
 
-    const result = await Product.deleteMany({ _id: { $in: productIds } });
+    const result = await Product.destroy({ where: { id: { [Op.in]: productIds } } });
 
     return res.status(200).json({
       success: true,
-      message: `${result.deletedCount} product(s) deleted successfully`,
-      data: { deletedCount: result.deletedCount },
+      message: `${result} product(s) deleted successfully`,
+      data: { deletedCount: result },
     });
   } catch (error) {
     return next(error);
@@ -342,12 +375,12 @@ const deleteProductsBulk = async (req, res, next) => {
 
 const deleteAllProducts = async (req, res, next) => {
   try {
-    const result = await Product.deleteMany({});
+    const result = await Product.destroy({ where: {} });
 
     return res.status(200).json({
       success: true,
-      message: `${result.deletedCount} product(s) deleted successfully`,
-      data: { deletedCount: result.deletedCount },
+      message: `${result} product(s) deleted successfully`,
+      data: { deletedCount: result },
     });
   } catch (error) {
     return next(error);
@@ -367,7 +400,7 @@ const updateProductStock = async (req, res, next) => {
       });
     }
 
-    const product = await Product.findById(id);
+    const product = await Product.findByPk(id);
     if (!product) {
       return res.status(404).json({ success: false, message: "Product not found" });
     }
@@ -387,15 +420,15 @@ const updateProductStock = async (req, res, next) => {
     const saved = await product.save();
 
     await recordInventoryLog({
-      productId: saved._id,
+      productId: saved.id,
       type: numericAdjustment > 0 ? "manual_add" : "manual_remove",
       quantityChange: numericAdjustment,
       previousStock,
       newStock: nextStock,
       note: note || "Stock manually updated",
       referenceType: "product",
-      referenceId: String(saved._id),
-      performedBy: req.admin._id,
+      referenceId: String(saved.id),
+      performedBy: req.admin?.id || req.admin?._id || null,
     });
 
     return res.status(200).json({ success: true, data: saved });
@@ -416,7 +449,9 @@ const toggleFeedbackVisibility = async (req, res, next) => {
       });
     }
 
-    const product = await Product.findById(productId);
+    const product = await Product.findByPk(productId, {
+      include: [{ model: ProductFeedback, as: "feedbacks" }],
+    });
     if (!product) {
       return res.status(404).json({
         success: false,
@@ -424,7 +459,9 @@ const toggleFeedbackVisibility = async (req, res, next) => {
       });
     }
 
-    const feedback = product.feedbacks.id(feedbackId);
+    const feedback = Array.isArray(product.feedbacks)
+      ? product.feedbacks.find((item) => String(item.id) === String(feedbackId))
+      : null;
     if (!feedback) {
       return res.status(404).json({
         success: false,
@@ -432,13 +469,12 @@ const toggleFeedbackVisibility = async (req, res, next) => {
       });
     }
 
-    feedback.isVisible = isVisible;
-    await product.save();
+    await ProductFeedback.update({ isVisible }, { where: { id: feedbackId, productId } });
 
     return res.status(200).json({
       success: true,
       message: `Feedback ${isVisible ? "shown" : "hidden"} successfully`,
-      data: feedback,
+      data: { ...feedback.toJSON(), isVisible },
     });
   } catch (error) {
     return next(error);
