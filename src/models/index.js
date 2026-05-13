@@ -291,11 +291,11 @@ const Order = sequelize.define("Order", {
     defaultValue: "",
   },
   paymentMethod: {
-    type: DataTypes.ENUM("cod"),
+    type: DataTypes.ENUM("cod", "bank", "jazzcash", "card"),
     defaultValue: "cod",
   },
   paymentStatus: {
-    type: DataTypes.ENUM("cod_pending", "paid"),
+    type: DataTypes.ENUM("cod_pending", "pending", "paid"),
     defaultValue: "cod_pending",
   },
   note: {

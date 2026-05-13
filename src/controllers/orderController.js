@@ -427,10 +427,11 @@ const createOrder = async (req, res, next) => {
       return res.status(400).json({ success: false, message: validationMessage });
     }
 
-    if (data.paymentMethod && data.paymentMethod !== "cod") {
+    const supportedPaymentMethods = new Set(["cod", "bank", "jazzcash", "card"]);
+    if (data.paymentMethod && !supportedPaymentMethods.has(data.paymentMethod)) {
       return res.status(400).json({
         success: false,
-        message: "Only cash on delivery is supported",
+        message: "Unsupported payment method",
       });
     }
 
@@ -451,10 +452,13 @@ const createOrder = async (req, res, next) => {
       deliveryCharge = Number(settings?.bigDeliveryCharge || 0);
     }
 
+    const paymentMethod = data.paymentMethod || "cod";
+    const paymentStatus = paymentMethod === "cod" ? "cod_pending" : "pending";
+
     const order = await applyInventoryAndCreateOrder({
       ...data,
-      paymentMethod: "cod",
-      paymentStatus: "cod_pending",
+      paymentMethod,
+      paymentStatus,
       normalizedItems,
       deliveryCharge,
     });
