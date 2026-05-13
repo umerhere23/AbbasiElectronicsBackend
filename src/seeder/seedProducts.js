@@ -15,6 +15,11 @@ const productTemplates = [
     onSale: true,
     salePercent: 8,
     size: "big",
+    images: [
+      "https://picsum.photos/seed/samsung-qled-1/900/600",
+      "https://picsum.photos/seed/samsung-qled-2/900/600",
+      "https://picsum.photos/seed/samsung-qled-3/900/600",
+    ],
   },
   {
     name: "LG 43in UHD Smart TV",
@@ -26,6 +31,10 @@ const productTemplates = [
     onSale: false,
     salePercent: 0,
     size: "big",
+    images: [
+      "https://picsum.photos/seed/lg-uhd-1/900/600",
+      "https://picsum.photos/seed/lg-uhd-2/900/600",
+    ],
   },
   {
     name: "Haier Inverter AC 1.5 Ton",
@@ -37,6 +46,10 @@ const productTemplates = [
     onSale: true,
     salePercent: 10,
     size: "big",
+    images: [
+      "https://picsum.photos/seed/haier-ac-1/900/600",
+      "https://picsum.photos/seed/haier-ac-2/900/600",
+    ],
   },
   {
     name: "Dawlance Refrigerator 14 CFT",
@@ -48,6 +61,10 @@ const productTemplates = [
     onSale: false,
     salePercent: 0,
     size: "big",
+    images: [
+      "https://picsum.photos/seed/dawlance-fridge-1/900/600",
+      "https://picsum.photos/seed/dawlance-fridge-2/900/600",
+    ],
   },
   {
     name: "Panasonic Microwave Oven",
@@ -59,6 +76,10 @@ const productTemplates = [
     onSale: true,
     salePercent: 7,
     size: "small",
+    images: [
+      "https://picsum.photos/seed/panasonic-microwave-1/900/600",
+      "https://picsum.photos/seed/panasonic-microwave-2/900/600",
+    ],
   },
   {
     name: "Samsung Galaxy S24",
@@ -70,6 +91,10 @@ const productTemplates = [
     onSale: true,
     salePercent: 6,
     size: "small",
+    images: [
+      "https://picsum.photos/seed/samsung-s24-1/900/600",
+      "https://picsum.photos/seed/samsung-s24-2/900/600",
+    ],
   },
   {
     name: "Xiaomi Redmi Note 13",
@@ -81,6 +106,10 @@ const productTemplates = [
     onSale: true,
     salePercent: 9,
     size: "small",
+    images: [
+      "https://picsum.photos/seed/redmi-note-1/900/600",
+      "https://picsum.photos/seed/redmi-note-2/900/600",
+    ],
   },
   {
     name: "HP Pavilion 15 Laptop",
@@ -92,6 +121,10 @@ const productTemplates = [
     onSale: true,
     salePercent: 11,
     size: "big",
+    images: [
+      "https://picsum.photos/seed/hp-pavilion-1/900/600",
+      "https://picsum.photos/seed/hp-pavilion-2/900/600",
+    ],
   },
   {
     name: "Anker PowerCore 20000",
@@ -103,6 +136,10 @@ const productTemplates = [
     onSale: true,
     salePercent: 15,
     size: "small",
+    images: [
+      "https://picsum.photos/seed/anker-powercore-1/900/600",
+      "https://picsum.photos/seed/anker-powercore-2/900/600",
+    ],
   },
   {
     name: "Apple AirPods Pro 2",
@@ -114,6 +151,10 @@ const productTemplates = [
     onSale: true,
     salePercent: 10,
     size: "small",
+    images: [
+      "https://picsum.photos/seed/airpods-pro-1/900/600",
+      "https://picsum.photos/seed/airpods-pro-2/900/600",
+    ],
   },
 ];
 
@@ -171,6 +212,7 @@ const seedProducts = async () => {
         salePrice,
         inStock: template.stockCount > 0,
         image: `https://picsum.photos/seed/${encodeURIComponent(template.name)}/800/600`,
+        images: template.images || [],
         createdBy: admin.id,
       };
 

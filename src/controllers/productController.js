@@ -1,10 +1,31 @@
 const { Op } = require("sequelize");
-const { Product, Category, Brand, ProductFeedback } = require("../models");
+const { Product, Category, Brand, ProductFeedback, OrderItem } = require("../models");
 const { recordInventoryLog } = require("../utils/inventoryLogger");
 
 const isUUID = (val) => {
   if (!val || typeof val !== "string") return false;
   return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(val);
+};
+
+const normalizeImageList = (images, primaryImage) => {
+  const values = Array.isArray(images)
+    ? images
+    : typeof images === "string"
+      ? images.split(/\r?\n|,/)
+      : [];
+
+  const normalized = values
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+
+  if (primaryImage) {
+    const primary = String(primaryImage).trim();
+    if (primary && !normalized.includes(primary)) {
+      normalized.unshift(primary);
+    }
+  }
+
+  return [...new Set(normalized)];
 };
 const buildSalePricing = (basePrice, onSale, salePercent) => {
   const normalizedPrice = Number(basePrice);
@@ -89,7 +110,11 @@ const getProducts = async (req, res, next) => {
 
     const sortQuery = sortMap[sort] || [["createdAt", "DESC"]];
 
-    const products = await Product.findAll({ where: filter, order: sortQuery });
+    const products = await Product.findAll({
+      where: filter,
+      order: sortQuery,
+      include: [{ model: ProductFeedback, as: "feedbacks" }],
+    });
     res.status(200).json({ success: true, data: products });
   } catch (error) {
     next(error);
@@ -119,7 +144,9 @@ const getProductById = async (req, res, next) => {
       });
     }
 
-    const product = await Product.findByPk(id);
+    const product = await Product.findByPk(id, {
+      include: [{ model: ProductFeedback, as: "feedbacks" }],
+    });
 
     if (!product) {
       return res.status(404).json({
@@ -128,7 +155,29 @@ const getProductById = async (req, res, next) => {
       });
     }
 
-    return res.status(200).json({ success: true, data: product });
+    // Increment viewer count
+    await product.increment("viewerCount", { by: 1 });
+
+    // Calculate sales in last 10 hours
+    const tenHoursAgo = new Date(Date.now() - 10 * 60 * 60 * 1000);
+    const recentSalesCount = await OrderItem.count({
+      where: {
+        productId: id,
+        createdAt: {
+          [Op.gte]: tenHoursAgo,
+        },
+      },
+    });
+
+    // Add stats to product data
+    const productData = product.toJSON();
+    productData.stats = {
+      currentViewers: product.viewerCount + 1, // +1 for current viewer
+      recentSalesCount: recentSalesCount,
+      soldInLastTenHours: recentSalesCount,
+    };
+
+    return res.status(200).json({ success: true, data: productData });
   } catch (error) {
     return next(error);
   }
@@ -136,7 +185,7 @@ const getProductById = async (req, res, next) => {
 
 const addProduct = async (req, res, next) => {
   try {
-    const { name, description, price, stockCount, onSale, salePercent, category, categoryId, brand, brandId, image, size } = req.body;
+    const { name, description, price, stockCount, onSale, salePercent, category, categoryId, brand, brandId, image, images, size } = req.body;
 
     if (!name || price === undefined) {
       return res.status(400).json({
@@ -217,6 +266,8 @@ const addProduct = async (req, res, next) => {
       }
     }
 
+    const productImages = normalizeImageList(images, image);
+
     const product = await Product.create({
       name,
       description,
@@ -230,6 +281,7 @@ const addProduct = async (req, res, next) => {
       brand: brandName,
       brandId: brandRef,
       image,
+      images: productImages,
       size: normalizedSize,
       createdBy: adminId,
     });
@@ -257,7 +309,7 @@ const addProduct = async (req, res, next) => {
 const editProduct = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, description, price, stockCount, onSale, salePercent, category, categoryId, brand, brandId, image, size } = req.body;
+    const { name, description, price, stockCount, onSale, salePercent, category, categoryId, brand, brandId, image, images, size } = req.body;
 
     if (!isUUID(id)) {
       return res.status(400).json({
@@ -347,7 +399,9 @@ const editProduct = async (req, res, next) => {
     } else {
       product.brand = brand ?? product.brand;
     }
+    const productImages = normalizeImageList(images, image ?? product.image);
     product.image = image ?? product.image;
+    product.images = productImages.length ? productImages : product.images;
     product.inStock = product.stockCount > 0;
 
     const pricing = buildSalePricing(product.price, product.onSale, salePercent ?? product.salePercent);
@@ -546,6 +600,36 @@ const toggleFeedbackVisibility = async (req, res, next) => {
   }
 };
 
+const deleteFeedback = async (req, res, next) => {
+  try {
+    const { productId, feedbackId } = req.params;
+
+    const product = await Product.findByPk(productId, {
+      include: [{ model: ProductFeedback, as: "feedbacks" }],
+    });
+    if (!product) {
+      return res.status(404).json({ success: false, message: "Product not found" });
+    }
+
+    const feedback = Array.isArray(product.feedbacks)
+      ? product.feedbacks.find((item) => String(item.id) === String(feedbackId))
+      : null;
+    if (!feedback) {
+      return res.status(404).json({ success: false, message: "Feedback not found" });
+    }
+
+    await ProductFeedback.destroy({ where: { id: feedbackId, productId } });
+
+    return res.status(200).json({
+      success: true,
+      message: "Feedback removed successfully",
+      data: feedback.toJSON(),
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 module.exports = {
   getProducts,
   getSaleItems,
@@ -557,4 +641,5 @@ module.exports = {
   deleteAllProducts,
   updateProductStock,
   toggleFeedbackVisibility,
+  deleteFeedback,
 };

@@ -10,6 +10,7 @@ const {
   deleteAllProducts,
   updateProductStock,
   toggleFeedbackVisibility,
+  deleteFeedback,
 } = require("../controllers/productController");
 const { protectAdmin } = require("../middlewares/authMiddleware");
 
@@ -24,6 +25,7 @@ router.delete("/all", protectAdmin, deleteAllProducts);
 router.put("/:id", protectAdmin, editProduct);
 router.patch("/:id/stock", protectAdmin, updateProductStock);
 router.patch("/:productId/feedback/:feedbackId/visibility", protectAdmin, toggleFeedbackVisibility);
+router.delete("/:productId/feedback/:feedbackId", protectAdmin, deleteFeedback);
 router.delete("/:id", protectAdmin, deleteProduct);
 
 module.exports = router;

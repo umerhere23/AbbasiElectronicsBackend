@@ -198,6 +198,14 @@ const Product = sequelize.define("Product", {
     type: DataTypes.STRING,
     defaultValue: "",
   },
+  images: {
+    type: DataTypes.JSON,
+    defaultValue: [],
+  },
+  viewerCount: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+  },
   createdBy: {
     type: DataTypes.UUID,
     allowNull: true,
