@@ -49,6 +49,17 @@ src/
 - `npm run seed:admin` -> Create/update super admin
 - `npm run seed:products` -> Seed 20 products across categories
 
+## SMTP Setup
+For invoice emails, the backend reads these env vars:
+- `SMTP_HOST=smtp.hostinger.com`
+- `SMTP_PORT=465`
+- `SMTP_SECURE=true`
+- `SMTP_USER=your full Hostinger email`
+- `SMTP_PASS=your mailbox password`
+- `SMTP_FROM=same as SMTP_USER`
+
+If you want STARTTLS instead, use `SMTP_PORT=587` and `SMTP_SECURE=false`.
+
 ### Create user body
 {
   "name": "John Doe",

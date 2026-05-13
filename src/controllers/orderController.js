@@ -23,70 +23,92 @@ const buildInvoiceHtml = (order) => {
       : order.status === "cancelled"
         ? "#8f2c20"
         : "#1b4e7d";
+  const totalItems = (order.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
 
   const rows = (order.items || [])
     .map(
       (item) => `
-      <tr>
-        <td style="padding:10px;border:1px solid #dbe5f1;">${item.productName}</td>
-        <td style="padding:10px;border:1px solid #dbe5f1;text-align:center;">${item.quantity}</td>
-        <td style="padding:10px;border:1px solid #dbe5f1;text-align:right;">PKR ${Number(item.unitPrice || 0).toLocaleString()}</td>
-        <td style="padding:10px;border:1px solid #dbe5f1;text-align:right;">PKR ${Number(item.lineTotal || 0).toLocaleString()}</td>
+      <tr style="background:${(order.items || []).indexOf(item) % 2 === 0 ? '#f9fbff' : '#ffffff'};">
+        <td style="padding:12px 10px;border:1px solid #dbe5f1;font-weight:600;color:#123953;">${item.productName}</td>
+        <td style="padding:12px 10px;border:1px solid #dbe5f1;text-align:center;">${item.quantity}</td>
+        <td style="padding:12px 10px;border:1px solid #dbe5f1;text-align:right;">PKR ${Number(item.unitPrice || 0).toLocaleString()}</td>
+        <td style="padding:12px 10px;border:1px solid #dbe5f1;text-align:right;font-weight:700;">PKR ${Number(item.lineTotal || 0).toLocaleString()}</td>
       </tr>`
     )
     .join("");
 
   return `
-    <div style="font-family:Segoe UI,Arial,sans-serif;color:#142230;max-width:760px;margin:0 auto;background:#f5f7fb;padding:16px;">
-      <div style="background:#24338f;color:#ffffff;border-radius:12px 12px 0 0;padding:14px 16px;">
-        <h2 style="margin:0;font-size:21px;line-height:1.2;">Abbasi Electronics</h2>
-        <p style="margin:6px 0 0;font-size:13px;opacity:0.95;">Order Invoice</p>
+    <div style="font-family:Segoe UI,Arial,sans-serif;color:#142230;max-width:780px;margin:0 auto;background:linear-gradient(180deg,#f2f7ff 0%,#f7f8fc 100%);padding:18px;">
+      <div style="background:linear-gradient(135deg,#24338f 0%,#3855b7 55%,#d07a2f 140%);color:#ffffff;border-radius:18px 18px 0 0;padding:18px 20px;">
+        <div style="display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:flex-start;">
+          <div>
+            <p style="margin:0 0 6px;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;opacity:0.85;">Abbasi Electronics</p>
+            <h2 style="margin:0;font-size:26px;line-height:1.15;">Order Invoice</h2>
+            <p style="margin:8px 0 0;font-size:14px;opacity:0.95;max-width:420px;">Thank you for ordering with us. We will confirm your order shortly and keep you updated at every step.</p>
+          </div>
+          <div style="text-align:right;min-width:160px;">
+            <div style="display:inline-block;background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.24);border-radius:999px;padding:6px 12px;font-weight:700;font-size:12px;letter-spacing:0.04em;">
+              ${statusLabel}
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div style="background:#ffffff;border:1px solid #d9e4f2;border-top:0;border-radius:0 0 12px 12px;padding:16px;">
-        <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
-          <div>
-            <p style="margin:0 0 4px;"><strong>Order ID:</strong> ${order.id}</p>
-            <p style="margin:0 0 4px;"><strong>Date:</strong> ${new Date(order.createdAt).toLocaleString()}</p>
-            <p style="margin:0;"><strong>Customer:</strong> ${order.customerName}</p>
+      <div style="background:#ffffff;border:1px solid #d9e4f2;border-top:0;border-radius:0 0 18px 18px;padding:18px;box-shadow:0 16px 36px rgba(13,39,68,0.08);">
+        <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:16px;">
+          <div style="background:#f7fbff;border:1px solid #d9e4f2;border-radius:14px;padding:12px;">
+            <div style="font-size:11px;color:#60758b;text-transform:uppercase;letter-spacing:0.08em;">Order ID</div>
+            <div style="font-size:14px;font-weight:700;color:#123953;word-break:break-word;">${order.id}</div>
           </div>
-          <div style="text-align:right;">
-            <p style="margin:0 0 6px;"><strong>Payment:</strong> ${paymentLabel}</p>
-            <span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#eef5ff;border:1px solid #cadcf2;color:${statusColor};font-weight:700;font-size:12px;">${statusLabel}</span>
+          <div style="background:#f7fbff;border:1px solid #d9e4f2;border-radius:14px;padding:12px;">
+            <div style="font-size:11px;color:#60758b;text-transform:uppercase;letter-spacing:0.08em;">Placed On</div>
+            <div style="font-size:14px;font-weight:700;color:#123953;">${new Date(order.createdAt).toLocaleString()}</div>
+          </div>
+          <div style="background:#f7fbff;border:1px solid #d9e4f2;border-radius:14px;padding:12px;">
+            <div style="font-size:11px;color:#60758b;text-transform:uppercase;letter-spacing:0.08em;">Items</div>
+            <div style="font-size:14px;font-weight:700;color:#123953;">${totalItems}</div>
+          </div>
+          <div style="background:#f7fbff;border:1px solid #d9e4f2;border-radius:14px;padding:12px;">
+            <div style="font-size:11px;color:#60758b;text-transform:uppercase;letter-spacing:0.08em;">Payment</div>
+            <div style="font-size:14px;font-weight:700;color:#123953;">${paymentLabel}</div>
           </div>
         </div>
 
-        <table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:14px;">
-          <thead>
-            <tr>
-              <th style="padding:10px;border:1px solid #dbe5f1;text-align:left;background:#eef5fd;color:#133b59;">Item</th>
-              <th style="padding:10px;border:1px solid #dbe5f1;text-align:center;background:#eef5fd;color:#133b59;">Qty</th>
-              <th style="padding:10px;border:1px solid #dbe5f1;text-align:right;background:#eef5fd;color:#133b59;">Unit Price</th>
-              <th style="padding:10px;border:1px solid #dbe5f1;text-align:right;background:#eef5fd;color:#133b59;">Line Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rows}
-          </tbody>
-        </table>
+        <div style="overflow:hidden;border:1px solid #dbe5f1;border-radius:14px;">
+          <table style="width:100%;border-collapse:collapse;font-size:14px;">
+            <thead>
+              <tr>
+                <th style="padding:12px 10px;border:1px solid #dbe5f1;text-align:left;background:#eef5fd;color:#133b59;">Item</th>
+                <th style="padding:12px 10px;border:1px solid #dbe5f1;text-align:center;background:#eef5fd;color:#133b59;">Qty</th>
+                <th style="padding:12px 10px;border:1px solid #dbe5f1;text-align:right;background:#eef5fd;color:#133b59;">Unit Price</th>
+                <th style="padding:12px 10px;border:1px solid #dbe5f1;text-align:right;background:#eef5fd;color:#133b59;">Line Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows || `<tr><td colspan="4" style="padding:16px;text-align:center;color:#5a6f85;">No items found.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
 
-        <div style="margin-top:14px;margin-left:auto;max-width:280px;border:1px solid #d9e4f2;background:#f8fbff;border-radius:10px;padding:10px;">
-          <p style="margin:4px 0;display:flex;justify-content:space-between;">
+        <div style="margin-top:16px;display:flex;justify-content:flex-end;">
+          <div style="width:min(100%,320px);border:1px solid #d9e4f2;background:linear-gradient(180deg,#f8fbff 0%,#f3f8ff 100%);border-radius:14px;padding:14px;">
+          <p style="margin:4px 0;display:flex;justify-content:space-between;color:#53687d;">
             <span>Subtotal</span>
             <strong>PKR ${Number(order.subTotal || 0).toLocaleString()}</strong>
           </p>
-          <p style="margin:4px 0;display:flex;justify-content:space-between;">
+          <p style="margin:4px 0;display:flex;justify-content:space-between;color:#53687d;">
             <span>Delivery</span>
             <strong>PKR ${Number(order.deliveryCharge || 0).toLocaleString()}</strong>
           </p>
-          <p style="margin:8px 0 0;padding-top:8px;border-top:1px dashed #c8d8ea;display:flex;justify-content:space-between;font-size:17px;color:#0f3d5f;">
+          <p style="margin:10px 0 0;padding-top:10px;border-top:1px dashed #c8d8ea;display:flex;justify-content:space-between;font-size:17px;color:#0f3d5f;">
             <span><strong>Total</strong></span>
             <strong>PKR ${Number(order.totalAmount || 0).toLocaleString()}</strong>
           </p>
+          </div>
         </div>
 
-        <div style="margin-top:14px;padding-top:10px;border-top:1px solid #e3ebf5;color:#4c6178;font-size:13px;">
-          Thank you for shopping with Abbasi Electronics.
+        <div style="margin-top:16px;padding:14px 16px;border-radius:14px;background:#fff7ed;border:1px solid #f4d3a8;color:#8a4b11;font-size:13px;line-height:1.5;">
+          Thank you for ordering with Abbasi Electronics. We will confirm your order shortly and share any updates by email or WhatsApp.
         </div>
       </div>
     </div>
@@ -135,13 +157,13 @@ const buildStatusUpdateHtml = (order, note = "") => {
   const trackUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/track-order`;
 
   return `
-    <div style="font-family:Segoe UI,Arial,sans-serif;color:#142230;max-width:760px;margin:0 auto;background:#f5f7fb;padding:16px;">
-      <div style="background:#24338f;color:#ffffff;border-radius:12px 12px 0 0;padding:14px 16px;">
+    <div style="font-family:Segoe UI,Arial,sans-serif;color:#142230;max-width:760px;margin:0 auto;background:linear-gradient(180deg,#f2f7ff 0%,#f7f8fc 100%);padding:16px;">
+      <div style="background:linear-gradient(135deg,#24338f 0%,#3855b7 55%,#d07a2f 140%);color:#ffffff;border-radius:16px 16px 0 0;padding:16px 18px;">
         <h2 style="margin:0;font-size:21px;line-height:1.2;">Abbasi Electronics</h2>
         <p style="margin:6px 0 0;font-size:13px;opacity:0.95;">Order Status Update</p>
       </div>
 
-      <div style="background:#ffffff;border:1px solid #d9e4f2;border-top:0;border-radius:0 0 12px 12px;padding:16px;">
+      <div style="background:#ffffff;border:1px solid #d9e4f2;border-top:0;border-radius:0 0 16px 16px;padding:16px;box-shadow:0 14px 30px rgba(13,39,68,0.08);">
         <p style="margin:0 0 6px;"><strong>Order ID:</strong> ${order.id}</p>
         <p style="margin:0 0 6px;"><strong>Customer:</strong> ${order.customerName}</p>
         <p style="margin:0 0 10px;"><strong>Updated At:</strong> ${new Date().toLocaleString()}</p>
@@ -477,6 +499,10 @@ const updateOrderStatus = async (req, res, next) => {
     const { id } = req.params;
     const { status, note } = req.body;
     const normalizedNote = String(note || "").trim();
+
+    if (!isUUID(id)) {
+      return res.status(400).json({ success: false, message: "Valid order ID is required" });
+    }
 
     const allowed = ["pending", "confirmed", "shipped", "delivered", "cancelled"];
     if (!allowed.includes(status)) {
