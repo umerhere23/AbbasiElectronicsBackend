@@ -79,12 +79,12 @@ const getProducts = async (req, res, next) => {
     }
 
     const sortMap = {
-      newest: { createdAt: -1 },
-      oldest: { createdAt: 1 },
-      priceAsc: { salePrice: 1 },
-      priceDesc: { salePrice: -1 },
-      nameAsc: { name: 1 },
-      nameDesc: { name: -1 },
+      newest: [["createdAt", "DESC"]],
+      oldest: [["createdAt", "ASC"]],
+      priceAsc: [["salePrice", "ASC"]],
+      priceDesc: [["salePrice", "DESC"]],
+      nameAsc: [["name", "ASC"]],
+      nameDesc: [["name", "DESC"]],
     };
 
     const sortQuery = sortMap[sort] || [["createdAt", "DESC"]];

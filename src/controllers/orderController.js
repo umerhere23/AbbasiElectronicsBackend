@@ -10,6 +10,10 @@ const {
 } = require("../models");
 const { recordInventoryLog } = require("../utils/inventoryLogger");
 
+const isUUID = (value) =>
+  typeof value === "string" &&
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(value);
+
 const buildInvoiceHtml = (order) => {
   const statusLabel = String(order.status || "pending").toUpperCase();
   const paymentLabel = String(order.paymentMethod || "cod").toUpperCase();
@@ -316,7 +320,7 @@ const applyInventoryAndCreateOrder = async ({
   });
 
   await OrderItem.bulkCreate(
-    orderItems.map((item) => ({
+    normalizedItems.map((item) => ({
       orderId: order.id,
       productId: item._productDoc.id,
       productName: item._productDoc.name,
@@ -569,6 +573,10 @@ const getOrderById = async (req, res, next) => {
     const { id } = req.params;
     const email = String(req.query.email || "").trim().toLowerCase();
 
+    if (!isUUID(id)) {
+      return res.status(400).json({ success: false, message: "Valid order ID is required" });
+    }
+
     if (!email) {
       return res.status(400).json({ success: false, message: "Email is required" });
     }
@@ -604,6 +612,10 @@ const trackOrder = async (req, res, next) => {
 
     if (!orderId || !email) {
       return res.status(400).json({ success: false, message: "Order ID and email are required" });
+    }
+
+    if (!isUUID(orderId)) {
+      return res.status(400).json({ success: false, message: "Valid order ID is required" });
     }
 
     const order = await Order.findByPk(orderId, {

@@ -1,31 +1,147 @@
 const dotenv = require("dotenv");
-const { connectDB } = require("../config/db");
-const { Admin, Product } = require("../models");
-
 dotenv.config();
 
+const { connectDB } = require("../config/db");
+const { Admin, Product, Category, Brand } = require("../models");
+
 const productTemplates = [
-  { name: "Samsung 55in QLED TV", category: "TV & Audio", price: 219999, stockCount: 12, onSale: true, salePercent: 8 },
-  { name: "LG 43in UHD Smart TV", category: "TV & Audio", price: 124999, stockCount: 14, onSale: false, salePercent: 0 },
-  { name: "Sony HT-S40R Soundbar", category: "TV & Audio", price: 69999, stockCount: 9, onSale: true, salePercent: 12 },
-  { name: "Haier Inverter AC 1.5 Ton", category: "Appliances", price: 185000, stockCount: 10, onSale: true, salePercent: 10 },
-  { name: "Dawlance Refrigerator 14 CFT", category: "Appliances", price: 138500, stockCount: 8, onSale: false, salePercent: 0 },
-  { name: "Panasonic Microwave Oven", category: "Appliances", price: 45999, stockCount: 16, onSale: true, salePercent: 7 },
-  { name: "iPhone 15 128GB", category: "Mobiles", price: 324999, stockCount: 7, onSale: false, salePercent: 0 },
-  { name: "Samsung Galaxy S24", category: "Mobiles", price: 274999, stockCount: 9, onSale: true, salePercent: 6 },
-  { name: "Xiaomi Redmi Note 13", category: "Mobiles", price: 82999, stockCount: 20, onSale: true, salePercent: 9 },
-  { name: "HP Pavilion 15 Laptop", category: "Computing", price: 214999, stockCount: 11, onSale: true, salePercent: 11 },
-  { name: "Lenovo IdeaPad Slim 3", category: "Computing", price: 149999, stockCount: 13, onSale: false, salePercent: 0 },
-  { name: "Dell Inspiron 14", category: "Computing", price: 182500, stockCount: 10, onSale: true, salePercent: 5 },
-  { name: "Anker PowerCore 20000", category: "Accessories", price: 17999, stockCount: 30, onSale: true, salePercent: 15 },
-  { name: "Logitech MX Master 3S", category: "Accessories", price: 31999, stockCount: 22, onSale: false, salePercent: 0 },
-  { name: "Apple AirPods Pro 2", category: "Accessories", price: 79999, stockCount: 18, onSale: true, salePercent: 10 },
-  { name: "Canon EOS 2000D Kit", category: "Cameras", price: 174999, stockCount: 6, onSale: true, salePercent: 8 },
-  { name: "Nikon D5600 Kit", category: "Cameras", price: 228999, stockCount: 5, onSale: false, salePercent: 0 },
-  { name: "GoPro HERO 12", category: "Cameras", price: 144999, stockCount: 7, onSale: true, salePercent: 10 },
-  { name: "PlayStation 5 Console", category: "Gaming", price: 244999, stockCount: 9, onSale: false, salePercent: 0 },
-  { name: "Xbox Series X", category: "Gaming", price: 229999, stockCount: 8, onSale: true, salePercent: 6 },
+  {
+    name: "Samsung 55in QLED TV",
+    description: "55-inch QLED display with HDR support and smart apps.",
+    category: "TV & Audio",
+    brand: "Samsung",
+    price: 219999,
+    stockCount: 12,
+    onSale: true,
+    salePercent: 8,
+    size: "big",
+  },
+  {
+    name: "LG 43in UHD Smart TV",
+    description: "43-inch UHD smart TV with webOS and built-in streaming.",
+    category: "TV & Audio",
+    brand: "LG",
+    price: 124999,
+    stockCount: 14,
+    onSale: false,
+    salePercent: 0,
+    size: "big",
+  },
+  {
+    name: "Haier Inverter AC 1.5 Ton",
+    description: "Energy-efficient inverter AC with fast cooling.",
+    category: "Appliances",
+    brand: "Haier",
+    price: 185000,
+    stockCount: 10,
+    onSale: true,
+    salePercent: 10,
+    size: "big",
+  },
+  {
+    name: "Dawlance Refrigerator 14 CFT",
+    description: "Spacious 14 CFT refrigerator with efficient cooling performance.",
+    category: "Appliances",
+    brand: "Dawlance",
+    price: 138500,
+    stockCount: 8,
+    onSale: false,
+    salePercent: 0,
+    size: "big",
+  },
+  {
+    name: "Panasonic Microwave Oven",
+    description: "Compact microwave oven for daily heating and cooking.",
+    category: "Appliances",
+    brand: "Panasonic",
+    price: 45999,
+    stockCount: 16,
+    onSale: true,
+    salePercent: 7,
+    size: "small",
+  },
+  {
+    name: "Samsung Galaxy S24",
+    description: "Flagship Android smartphone with premium camera setup.",
+    category: "Mobiles",
+    brand: "Samsung",
+    price: 274999,
+    stockCount: 9,
+    onSale: true,
+    salePercent: 6,
+    size: "small",
+  },
+  {
+    name: "Xiaomi Redmi Note 13",
+    description: "Value smartphone with AMOLED display and long battery life.",
+    category: "Mobiles",
+    brand: "Xiaomi",
+    price: 82999,
+    stockCount: 20,
+    onSale: true,
+    salePercent: 9,
+    size: "small",
+  },
+  {
+    name: "HP Pavilion 15 Laptop",
+    description: "Performance laptop for office, study, and multimedia tasks.",
+    category: "Computing",
+    brand: "HP",
+    price: 214999,
+    stockCount: 11,
+    onSale: true,
+    salePercent: 11,
+    size: "big",
+  },
+  {
+    name: "Anker PowerCore 20000",
+    description: "High-capacity power bank with fast charging support.",
+    category: "Accessories",
+    brand: "Anker",
+    price: 17999,
+    stockCount: 30,
+    onSale: true,
+    salePercent: 15,
+    size: "small",
+  },
+  {
+    name: "Apple AirPods Pro 2",
+    description: "Premium wireless earbuds with ANC and immersive audio.",
+    category: "Accessories",
+    brand: "Apple",
+    price: 79999,
+    stockCount: 18,
+    onSale: true,
+    salePercent: 10,
+    size: "small",
+  },
 ];
+
+const getOrCreateCategory = async (name, adminId) => {
+  const existing = await Category.findOne({ where: { name } });
+  if (existing) {
+    return existing;
+  }
+
+  return Category.create({
+    name,
+    description: `${name} category`,
+    createdBy: adminId,
+  });
+};
+
+const getOrCreateBrand = async (name, adminId) => {
+  const existing = await Brand.findOne({ where: { name } });
+  if (existing) {
+    return existing;
+  }
+
+  return Brand.create({
+    name,
+    description: `${name} brand`,
+    createdBy: adminId,
+  });
+};
 
 const seedProducts = async () => {
   try {
@@ -39,12 +155,19 @@ const seedProducts = async () => {
     }
 
     for (const template of productTemplates) {
+      const categoryDoc = await getOrCreateCategory(template.category, admin.id);
+      const brandDoc = await getOrCreateBrand(template.brand, admin.id);
+
       const salePrice = template.onSale
         ? Number((template.price * (1 - template.salePercent / 100)).toFixed(2))
         : template.price;
 
       const values = {
         ...template,
+        category: categoryDoc.name,
+        categoryId: categoryDoc.id,
+        brand: brandDoc.name,
+        brandId: brandDoc.id,
         salePrice,
         inStock: template.stockCount > 0,
         image: `https://picsum.photos/seed/${encodeURIComponent(template.name)}/800/600`,

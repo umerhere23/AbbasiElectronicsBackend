@@ -582,7 +582,7 @@ const StoreSetting = sequelize.define("StoreSetting", {
   },
   whatsappNumber: {
     type: DataTypes.STRING,
-    defaultValue: "923085067642",
+    defaultValue: "923485172609",
   },
 }, {
   timestamps: true,
